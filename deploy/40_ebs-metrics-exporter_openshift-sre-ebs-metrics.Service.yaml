@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ebs-metrics-exporter
+  namespace: openshift-sre-ebs-metrics
+  labels:
+    app.kubernetes.io/component: ebs-metrics-exporter
+    app.kubernetes.io/name: ebs-metrics-exporter
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/component: ebs-metrics-exporter
+    app.kubernetes.io/name: ebs-metrics-exporter
+  ports:
+  - name: metrics
+    port: 8090
+    targetPort: metrics
+    protocol: TCP

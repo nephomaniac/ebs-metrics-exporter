@@ -1,0 +1,51 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiterallyCanvas
+*.out
+
+# Build output
+bin/
+build/_output/
+ebs-metrics-exporter
+ebs-metrics-exporter-operator
+
+# Go workspace file
+go.work
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+
+# Kubernetes generated files
+/vendor/
+
+# Temporary files
+/tmp/
+
+# Boilerplate generated content (except generated-includes.mk which we track)
+/boilerplate/_lib/
+/boilerplate/_output/
+/boilerplate/openshift/
+
+# Coverage reports
+coverage.out
+cover.out
+*.coverprofile
+
+# OLM bundle
+bundle/
+bundle.Dockerfile

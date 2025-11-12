@@ -1,0 +1,83 @@
+# Image URL to use for building/pushing image targets
+IMG_OPERATOR ?= quay.io/openshift/ebs-metrics-exporter-operator:latest
+IMG_EXPORTER ?= quay.io/openshift/ebs-metrics-exporter:latest
+
+# Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
+ifeq (,$(shell go env GOBIN))
+GOBIN=$(shell go env GOPATH)/bin
+else
+GOBIN=$(shell go env GOBIN)
+endif
+
+.PHONY: all
+all: build
+
+##@ General
+
+.PHONY: help
+help: ## Display this help.
+	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
+
+##@ Development
+
+.PHONY: fmt
+fmt: ## Run go fmt against code.
+	go fmt ./...
+
+.PHONY: vet
+vet: ## Run go vet against code.
+	go vet ./...
+
+.PHONY: test
+test: fmt vet ## Run tests.
+	go test ./... -coverprofile cover.out
+
+##@ Build
+
+.PHONY: build
+build: fmt vet ## Build operator binary.
+	go build -o bin/ebs-metrics-exporter-operator main.go
+
+.PHONY: run
+run: fmt vet ## Run the operator from your host.
+	go run ./main.go
+
+.PHONY: docker-build-operator
+docker-build-operator: ## Build docker image for operator.
+	docker build -t ${IMG_OPERATOR} -f Dockerfile.operator .
+
+.PHONY: docker-push-operator
+docker-push-operator: ## Push docker image for operator.
+	docker push ${IMG_OPERATOR}
+
+.PHONY: docker-build-exporter
+docker-build-exporter: ## Build docker image for exporter DaemonSet.
+	docker build -t ${IMG_EXPORTER} -f Dockerfile .
+
+.PHONY: docker-push-exporter
+docker-push-exporter: ## Push docker image for exporter DaemonSet.
+	docker push ${IMG_EXPORTER}
+
+.PHONY: docker-build-all
+docker-build-all: docker-build-operator docker-build-exporter ## Build both docker images.
+
+.PHONY: docker-push-all
+docker-push-all: docker-push-operator docker-push-exporter ## Push both docker images.
+
+##@ Deployment
+
+.PHONY: deploy
+deploy: ## Deploy operator to the cluster.
+	kubectl apply -f deploy/
+
+.PHONY: undeploy
+undeploy: ## Undeploy operator from the cluster.
+	kubectl delete -f deploy/
+
+.PHONY: deploy-exporter
+deploy-exporter: ## Deploy exporter DaemonSet to the cluster.
+	kubectl apply -f k8s/
+
+.PHONY: undeploy-exporter
+undeploy-exporter: ## Undeploy exporter DaemonSet from the cluster.
+	kubectl delete -f k8s/

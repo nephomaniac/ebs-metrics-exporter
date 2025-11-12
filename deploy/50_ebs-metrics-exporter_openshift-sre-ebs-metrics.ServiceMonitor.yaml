@@ -1,0 +1,18 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: ebs-metrics-exporter
+  namespace: openshift-sre-ebs-metrics
+  labels:
+    app.kubernetes.io/component: ebs-metrics-exporter
+    app.kubernetes.io/name: ebs-metrics-exporter
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: ebs-metrics-exporter
+      app.kubernetes.io/name: ebs-metrics-exporter
+  endpoints:
+  - port: metrics
+    interval: 30s
+    path: /metrics
+    scheme: http

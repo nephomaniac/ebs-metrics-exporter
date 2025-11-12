@@ -1,0 +1,42 @@
+# CI operator configuration for ebs-metrics-exporter
+# This file is used by OpenShift Prow CI
+
+# Build root image configuration
+build_root_image:
+  namespace: openshift
+  name: release
+  tag: golang-1.22
+
+# Test configuration
+tests:
+- as: unit
+  commands: make test
+  container:
+    from: src
+
+- as: lint
+  commands: make lint
+  container:
+    from: src
+
+- as: coverage
+  commands: make coverage
+  container:
+    from: src
+
+# Image build configuration
+images:
+- dockerfile_path: Dockerfile.operator
+  to: ebs-metrics-exporter-operator
+
+- dockerfile_path: Dockerfile
+  to: ebs-metrics-exporter-daemonset
+  
+# Resources
+resources:
+  '*':
+    limits:
+      memory: 4Gi
+    requests:
+      cpu: 100m
+      memory: 200Mi

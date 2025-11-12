@@ -1,0 +1,41 @@
+# Git
+.git
+.gitignore
+
+# CI
+.ci-operator.yaml
+
+# Build artifacts
+bin/
+build/
+*.test
+*.out
+
+# Dependencies
+vendor/
+
+# Documentation  
+*.md
+docs/
+
+# IDE
+.idea
+.vscode
+
+# Kubernetes manifests (not needed in image)
+k8s/
+deploy/
+
+# Boilerplate
+boilerplate/
+
+# Makefile and project config
+Makefile
+Makefile.operator
+project.mk
+PROJECT
+
+# Other Dockerfiles
+Dockerfile.operator
+Dockerfile
+!Dockerfile.operator
