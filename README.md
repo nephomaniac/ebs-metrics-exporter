@@ -85,16 +85,6 @@ scrape_configs:
       - targets: ['localhost:9100']
 ```
 
-## Comparison with Python Version
-
-The original Python script (`ebs_script.py`) writes metrics to a text file for the node_exporter textfile collector. This Go version:
-
-1. **HTTP Server**: Runs a standalone HTTP server instead of writing to files
-2. **Real-time**: Metrics are collected on-demand when Prometheus scrapes
-3. **No State Files**: Calculates intervals between scrapes automatically
-4. **Simplified Deployment**: Single binary, no need for node_exporter textfile collector
-5. **Better Performance**: Go's compiled nature and efficient goroutines
-
 ## Architecture
 
 The exporter follows the Prometheus instrumentation best practices:
