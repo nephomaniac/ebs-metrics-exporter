@@ -16,11 +16,65 @@ OLM provides a declarative way to install, manage, and upgrade operators in Kube
 
 - **OpenShift 4.10+** (OLM is pre-installed)
 - **oc CLI** with cluster-admin access
-- **operator-sdk** v1.28.0+ (for bundle validation)
+- **operator-sdk** v1.28.0+ (for bundle validation and testing)
 - **opm** (Operator Package Manager) for catalog builds
 - **Docker or Podman** for building bundle/catalog images
 
+**Understanding the OLM Toolchain:**
+
+The OLM deployment workflow uses three main tools:
+
+1. **operator-sdk** → Validates and tests your operator bundle
+2. **opm** → Packages bundles into catalogs for distribution
+3. **oc/kubectl** → Deploys catalogs and manages operator lifecycle
+
+```
+┌─────────────────┐
+│ Operator Code   │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐    operator-sdk bundle validate
+│  OLM Bundle     │◄───────────────────────────────────
+│  (manifests +   │
+│   metadata)     │
+└────────┬────────┘
+         │
+         │ opm index add
+         ▼
+┌─────────────────┐
+│ Catalog Image   │
+│ (index of       │
+│  bundles)       │
+└────────┬────────┘
+         │
+         │ oc apply CatalogSource
+         ▼
+┌─────────────────┐
+│ OLM installs    │
+│ operator via    │
+│ OperatorHub     │
+└─────────────────┘
+```
+
 ### Install operator-sdk
+
+**What is operator-sdk?**
+
+The Operator SDK is a toolkit from the Operator Framework that helps developers build, test, and package Kubernetes operators. It provides commands for:
+- Creating operator projects from templates
+- **Validating OLM bundles** - Ensures your bundle meets OLM requirements
+- **Testing operators locally** - Quick deployment without building catalogs
+- Generating manifests and metadata
+
+**Why do you need it?**
+
+For this deployment, operator-sdk is used to:
+1. **Validate the bundle** (`operator-sdk bundle validate`) - Catches errors before deployment
+2. **Quick testing** (`operator-sdk run bundle`) - Test the operator without creating a full catalog
+3. **Cleanup** (`operator-sdk cleanup`) - Remove test deployments
+
+**Installation:**
 
 ```bash
 # macOS
@@ -32,9 +86,35 @@ export OS=$(uname | awk '{print tolower($0)}')
 export OPERATOR_SDK_DL_URL=https://github.com/operator-framework/operator-sdk/releases/download/v1.28.0
 curl -LO ${OPERATOR_SDK_DL_URL}/operator-sdk_${OS}_${ARCH}
 chmod +x operator-sdk_${OS}_${ARCH} && sudo mv operator-sdk_${OS}_${ARCH} /usr/local/bin/operator-sdk
+
+# Verify installation
+operator-sdk version
 ```
 
+**Note:** operator-sdk is **required** for bundle validation but **optional** for production deployment. You can skip it if you only need catalog-based deployment.
+
 ### Install opm
+
+**What is opm?**
+
+OPM (Operator Package Manager) is the tool for creating and managing operator catalogs. An operator catalog is an index of operators that OLM can discover and install. Think of it as a "package repository" for operators.
+
+OPM allows you to:
+- **Build catalog images** - Combine multiple operator bundles into a searchable catalog
+- **Add/remove bundles** - Update catalogs with new operator versions
+- **Validate catalogs** - Ensure catalog indexes are properly formatted
+- **Render manifests** - Generate catalog contents for inspection
+
+**Why do you need it?**
+
+For this deployment, opm is used to:
+1. **Create a catalog image** (`opm index add`) - Packages your bundle into a catalog
+2. **Publish to OperatorHub** - Makes your operator discoverable in the OpenShift/K8s UI
+3. **Enable automatic updates** - OLM uses catalogs to check for new versions
+
+The catalog image is what you reference in the CatalogSource resource, which tells OLM where to find your operator.
+
+**Installation:**
 
 ```bash
 # macOS
@@ -46,7 +126,12 @@ export OS=$(uname | awk '{print tolower($0)}')
 export OPM_DL_URL=https://github.com/operator-framework/operator-registry/releases/download/v1.28.0
 curl -LO ${OPM_DL_URL}/${OS}-${ARCH}-opm
 chmod +x ${OS}-${ARCH}-opm && sudo mv ${OS}-${ARCH}-opm /usr/local/bin/opm
+
+# Verify installation
+opm version
 ```
+
+**Note:** opm is **required** for catalog-based deployment but **optional** if using `operator-sdk run bundle` for testing.
 
 ## Bundle Structure
 
