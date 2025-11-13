@@ -45,20 +45,31 @@ This exporter can be deployed in two ways:
 1. **Standalone Binary** - Run directly on EC2 instances (see below)
 2. **OpenShift Operator** - Deploy as a DaemonSet in OpenShift clusters (see [OpenShift Deployment](#openshift-deployment))
 
+## Building
+
+For detailed build instructions, environment variables, and advanced build options, see **[BUILD.md](BUILD.md)**.
+
+### Quick Build
+
+```bash
+# Build collector binary (standalone)
+make build-collector
+
+# Build operator binary (Kubernetes)
+make build-operator
+
+# Build both
+make build
+```
+
 ## Standalone Deployment
 
 ### Requirements
 
-- Go 1.16 or later
+- Go 1.22 or later
 - Linux system with NVMe EBS volumes
 - Root/sudo access (required for NVMe IOCTLs)
 - Amazon EC2 instance with EBS volumes
-
-### Building
-
-```bash
-go build -o ebs-metrics-collector
-```
 
 ## Usage
 
@@ -108,52 +119,25 @@ For production use in OpenShift clusters, deploy as a DaemonSet that runs on eve
 
 ### Quick Start
 
-#### 1. Initialize Build System (First Time Only)
+#### 1. Build Container Images
+
+For detailed build instructions, see **[BUILD.md](BUILD.md)**.
 
 ```bash
-# Clone the repository
-git clone <repository-url>
-cd ebs-metrics-exporter
-
-# Initialize OpenShift boilerplate build system
-make boilerplate-update
-
-# Download dependencies
-go mod download
+# Quick build
+export IMG=quay.io/your-org/ebs-metrics-exporter:latest
+make docker-build
+make docker-push
 ```
 
-#### 2. Build Container Image
-
-```bash
-# Set your container registry
-export IMAGE_REGISTRY=quay.io/your-org
-export IMG=${IMAGE_REGISTRY}/ebs-metrics-exporter:latest
-
-# Build the container image
-make docker-build IMG=${IMG}
-
-# Push to registry
-make docker-push IMG=${IMG}
-```
-
-Alternatively, use Podman:
-
-```bash
-# Build with Podman
-podman build -t ${IMG} -f Dockerfile.operator .
-
-# Push to registry
-podman push ${IMG}
-```
-
-#### 3. Update Image Reference
+#### 2. Update Image Reference
 
 ```bash
 # Update the DaemonSet to use your image
 sed -i "s|REPLACE_IMAGE|${IMG}|g" deploy/30_ebs-metrics-exporter_openshift-sre-ebs-metrics.DaemonSet.yaml
 ```
 
-#### 4. Deploy to OpenShift
+#### 3. Deploy to OpenShift
 
 ```bash
 # Deploy all resources (ServiceAccount, SCC, DaemonSet, Service, ServiceMonitor)
@@ -163,7 +147,7 @@ make deploy
 oc apply -f deploy/
 ```
 
-#### 5. Verify Deployment
+#### 4. Verify Deployment
 
 ```bash
 # Check DaemonSet status
@@ -321,172 +305,16 @@ oc delete -f deploy/
 - **[DEPLOYMENT_SUMMARY.md](DEPLOYMENT_SUMMARY.md)** - Comprehensive deployment architecture reference
 - **[BOILERPLATE.md](BOILERPLATE.md)** - OpenShift boilerplate system documentation
 
-### Makefile Targets
+### Build Configuration
 
-```bash
-make help                  # Show all available targets
-make boilerplate-update    # Initialize build system (run once)
-make build                 # Build exporter binary locally
-make docker-build          # Build container image
-make docker-push           # Push image to registry
-make deploy                # Deploy to OpenShift cluster
-make undeploy              # Remove from OpenShift cluster
-```
+For detailed information about:
+- Available Makefile targets
+- Environment variables
+- Build customization options
+- Multi-architecture builds
+- FIPS mode configuration
 
-### Environment Variables
-
-The following environment variables can be set to customize the build and deployment process:
-
-#### Image Configuration
-
-```bash
-# Container registry (default: quay.io)
-IMAGE_REGISTRY=quay.io
-
-# Image repository/organization (default: app-sre)
-IMAGE_REPOSITORY=your-org
-
-# Complete image reference for the exporter
-IMG=quay.io/your-org/ebs-metrics-exporter:v1.0.0
-
-# Operator image (when using Makefile.operator)
-IMG_OPERATOR=quay.io/your-org/ebs-metrics-exporter-operator:latest
-
-# Exporter DaemonSet image (when using Makefile.operator)
-IMG_EXPORTER=quay.io/your-org/ebs-metrics-exporter:latest
-```
-
-#### Project Configuration
-
-```bash
-# Application name (default: ebs-metrics-exporter)
-APP_NAME=ebs-metrics-exporter
-
-# Target namespace (default: openshift-sre-ebs-metrics)
-NAMESPACE=openshift-sre-ebs-metrics
-
-# Operator version for OLM (default: 0.1.0)
-OPERATOR_VERSION=0.2.0
-```
-
-#### Build Configuration
-
-```bash
-# Enable FIPS-compliant builds (default: true)
-FIPS_ENABLED=true
-
-# Enable Konflux CI/CD builds (default: true)
-KONFLUX_BUILDS=true
-
-# Go build packages (default: ./...)
-GO_BUILD_PACKAGES=./cmd/...
-
-# Additional Go build flags
-GO_BUILD_FLAGS="-v -x"
-
-# Enable Go module vendoring (default: true)
-GOMOD_VENDOR=true
-```
-
-#### Usage Examples
-
-**Build with custom registry:**
-
-```bash
-export IMAGE_REGISTRY=quay.io/mycompany
-export IMAGE_REPOSITORY=sre-team
-make docker-build
-```
-
-This produces: `quay.io/mycompany/sre-team/ebs-metrics-exporter:latest`
-
-**Build specific version:**
-
-```bash
-export IMG=quay.io/mycompany/ebs-metrics-exporter:v1.2.3
-make docker-build
-make docker-push
-```
-
-**Build without FIPS:**
-
-```bash
-make docker-build FIPS_ENABLED=false
-```
-
-**Deploy to custom namespace:**
-
-```bash
-# Note: You'll need to update the namespace in deploy/*.yaml files
-export NAMESPACE=my-custom-namespace
-make deploy
-```
-
-**Build both operator and exporter with custom images:**
-
-```bash
-export IMG_OPERATOR=quay.io/myorg/ebs-operator:v1.0.0
-export IMG_EXPORTER=quay.io/myorg/ebs-exporter:v1.0.0
-make -f Makefile.operator docker-build-all
-make -f Makefile.operator docker-push-all
-```
-
-**Override multiple variables:**
-
-```bash
-make docker-build \
-  IMAGE_REGISTRY=registry.example.com \
-  IMAGE_REPOSITORY=team/project \
-  APP_NAME=ebs-exporter \
-  FIPS_ENABLED=true
-```
-
-#### Variable Precedence
-
-Variables can be set in multiple ways, with the following precedence (highest to lowest):
-
-1. **Command-line**: `make docker-build IMG=custom-image:tag`
-2. **Environment variables**: `export IMG=custom-image:tag && make docker-build`
-3. **project.mk**: Edit `project.mk` to set project defaults
-4. **Makefile defaults**: Built-in defaults in `Makefile`
-
-#### Common Scenarios
-
-**Development Build:**
-
-```bash
-# Quick local build without pushing
-make build
-```
-
-**Production Build:**
-
-```bash
-# Build and push versioned image
-export IMG=quay.io/production/ebs-metrics-exporter:v1.0.0
-make docker-build
-make docker-push
-```
-
-**Multi-Architecture Build:**
-
-```bash
-# Build for ARM64
-docker buildx build \
-  --platform linux/arm64 \
-  -t quay.io/myorg/ebs-metrics-exporter:v1.0.0-arm64 \
-  -f Dockerfile.operator .
-```
-
-**Testing Different Registries:**
-
-```bash
-# Test with local registry
-export IMAGE_REGISTRY=localhost:5000
-export IMAGE_REPOSITORY=testing
-make docker-build
-make docker-push
-```
+See **[BUILD.md](BUILD.md)**.
 
 ## Architecture
 
