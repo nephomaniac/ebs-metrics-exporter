@@ -21,12 +21,32 @@ boilerplate-update:
 
 # Container build targets
 .PHONY: docker-build
-docker-build: ## Build container image
+docker-build: docker-build-collector ## Build collector container image (default)
+
+.PHONY: docker-build-collector
+docker-build-collector: ## Build collector container image
 	docker build -t ${IMG} -f Dockerfile .
 
+.PHONY: docker-build-operator
+docker-build-operator: ## Build operator container image
+	docker build -t ${IMG}-operator -f Dockerfile.operator .
+
+.PHONY: docker-build-all
+docker-build-all: docker-build-collector docker-build-operator ## Build both container images
+
 .PHONY: docker-push
-docker-push: ## Push container image
+docker-push: docker-push-collector ## Push collector container image (default)
+
+.PHONY: docker-push-collector
+docker-push-collector: ## Push collector container image
 	docker push ${IMG}
+
+.PHONY: docker-push-operator
+docker-push-operator: ## Push operator container image
+	docker push ${IMG}-operator
+
+.PHONY: docker-push-all
+docker-push-all: docker-push-collector docker-push-operator ## Push both container images
 
 # Deploy targets
 .PHONY: deploy
@@ -39,11 +59,18 @@ undeploy: ## Undeploy DaemonSet from the cluster
 
 # Development targets
 .PHONY: build
-build: ## Build the exporter binary
-	CGO_ENABLED=0 go build -o bin/ebs-metrics-collector main.go
+build: build-collector build-operator ## Build both collector and operator binaries
+
+.PHONY: build-collector
+build-collector: ## Build the collector binary
+	CGO_ENABLED=0 go build -o bin/ebs-metrics-collector ./cmd/collector
+
+.PHONY: build-operator
+build-operator: ## Build the operator binary
+	CGO_ENABLED=0 go build -o bin/ebs-metrics-exporter-operator main.go
 
 .PHONY: run
-run: ## Run the exporter locally (requires sudo for device access)
+run: build-collector ## Run the collector locally (requires sudo for device access)
 	@echo "Note: This requires sudo access to read NVMe devices"
 	sudo ./bin/ebs-metrics-collector --device /dev/nvme1n1 --port 8090
 
