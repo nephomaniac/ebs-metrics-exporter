@@ -40,12 +40,12 @@ undeploy: ## Undeploy DaemonSet from the cluster
 # Development targets
 .PHONY: build
 build: ## Build the exporter binary
-	CGO_ENABLED=0 go build -o bin/ebs-metrics-exporter main.go
+	CGO_ENABLED=0 go build -o bin/ebs-metrics-collector main.go
 
 .PHONY: run
 run: ## Run the exporter locally (requires sudo for device access)
 	@echo "Note: This requires sudo access to read NVMe devices"
-	sudo ./bin/ebs-metrics-exporter --device /dev/nvme1n1 --port 8090
+	sudo ./bin/ebs-metrics-collector --device /dev/nvme1n1 --port 8090
 
 # Help target
 .PHONY: help

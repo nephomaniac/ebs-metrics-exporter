@@ -203,7 +203,7 @@ oc exec -n openshift-sre-ebs-metrics <pod-name> -- ls -la /dev/nvme*
 oc logs -n openshift-sre-ebs-metrics <pod-name>
 
 # Test IOCTL access
-oc exec -n openshift-sre-ebs-metrics <pod-name> -- /ebs-metrics-exporter --device /dev/nvme1n1
+oc exec -n openshift-sre-ebs-metrics <pod-name> -- /ebs-metrics-collector --device /dev/nvme1n1
 ```
 
 ### Prometheus Not Scraping

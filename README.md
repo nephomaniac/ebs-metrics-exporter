@@ -57,14 +57,14 @@ This exporter can be deployed in two ways:
 ### Building
 
 ```bash
-go build -o ebs-metrics-exporter
+go build -o ebs-metrics-collector
 ```
 
 ## Usage
 
 ```bash
 # Run the exporter (requires root access for IOCTL operations)
-sudo ./ebs-metrics-exporter --device /dev/nvme1n1 --port 8090
+sudo ./ebs-metrics-collector --device /dev/nvme1n1 --port 8090
 ```
 
 ### Command-line Flags
@@ -76,7 +76,7 @@ sudo ./ebs-metrics-exporter --device /dev/nvme1n1 --port 8090
 
 ```bash
 # Start the exporter for /dev/nvme1n1 on port 9100
-sudo ./ebs-metrics-exporter --device /dev/nvme1n1 --port 9100
+sudo ./ebs-metrics-collector --device /dev/nvme1n1 --port 9100
 ```
 
 The exporter will start an HTTP server with two endpoints:
@@ -285,7 +285,7 @@ oc exec -n openshift-sre-ebs-metrics $POD -- ls -la /dev/nvme*
 oc logs -n openshift-sre-ebs-metrics $POD -f
 
 # Test IOCTL access manually
-oc exec -n openshift-sre-ebs-metrics $POD -- /ebs-metrics-exporter --device /dev/nvme1n1
+oc exec -n openshift-sre-ebs-metrics $POD -- /ebs-metrics-collector --device /dev/nvme1n1
 ```
 
 #### Prometheus Not Scraping

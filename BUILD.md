@@ -78,7 +78,7 @@ The exporter collects NVMe statistics:
 # Build exporter binary
 make build-exporter
 
-# Output: bin/ebs-metrics-exporter
+# Output: bin/ebs-metrics-collector
 ```
 
 ### Build Everything
@@ -378,7 +378,7 @@ After successful builds:
 ```
 bin/
 ├── ebs-metrics-exporter-operator   # Operator binary
-└── ebs-metrics-exporter            # Exporter DaemonSet binary
+└── ebs-metrics-collector            # Exporter DaemonSet binary
 ```
 
 Container images:

@@ -38,7 +38,7 @@ spec:
         image: REPLACE_IMAGE
         imagePullPolicy: Always
         command:
-        - /ebs-metrics-exporter
+        - /ebs-metrics-collector
         args:
         - --device=$(EBS_DEVICE)
         - --port=8090
