@@ -47,6 +47,6 @@ coverage.out
 cover.out
 *.coverprofile
 
-# OLM bundle
-bundle/
-bundle.Dockerfile
+# OLM bundle - Note: bundle/ directory is now tracked for OLM deployment
+# bundle/
+# bundle.Dockerfile

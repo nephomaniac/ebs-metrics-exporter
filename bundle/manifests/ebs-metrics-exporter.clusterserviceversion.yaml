@@ -1,0 +1,243 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: ClusterServiceVersion
+metadata:
+  annotations:
+    alm-examples: '[]'
+    capabilities: Basic Install
+    categories: Monitoring
+    certified: "false"
+    containerImage: quay.io/app-sre/ebs-metrics-exporter-operator:v0.1.0
+    createdAt: "2024-01-01T00:00:00Z"
+    description: Operator that exports AWS EBS volume performance metrics via Prometheus
+    repository: https://github.com/nephomaniac/ebs-metrics-exporter
+    support: Red Hat
+  name: ebs-metrics-exporter.v0.1.0
+  namespace: placeholder
+spec:
+  apiservicedefinitions: {}
+  customresourcedefinitions:
+    owned: []
+  description: |
+    ## EBS Metrics Exporter Operator
+
+    The EBS Metrics Exporter Operator manages the deployment and lifecycle of the EBS Metrics
+    Exporter DaemonSet in OpenShift clusters. It collects AWS EBS volume performance metrics
+    directly from NVMe devices and exposes them via Prometheus.
+
+    ### Features
+
+    * **NVMe Device Monitoring**: Direct access to AWS EBS performance statistics via NVMe IOCTLs
+    * **Prometheus Integration**: Native Prometheus metrics exposition with ServiceMonitor support
+    * **DaemonSet Management**: Automatically deploys collectors on every cluster node
+    * **Cluster-Wide Metrics**: Aggregated metrics across all nodes with cluster_id labeling
+    * **Performance Throttling Detection**: Monitors IOPS and throughput limit violations
+
+    ### Metrics Exposed
+
+    #### Counter Metrics
+    - `ebs_volume_performance_exceeded_iops_total` - Volume IOPS limit exceeded (μs)
+    - `ebs_volume_performance_exceeded_throughput_total` - Volume throughput limit exceeded (μs)
+    - `ebs_instance_performance_exceeded_iops_total` - Instance IOPS limit exceeded (μs)
+    - `ebs_instance_performance_exceeded_throughput_total` - Instance throughput limit exceeded (μs)
+    - `ebs_total_read_ops_total` - Total read operations
+    - `ebs_total_write_ops_total` - Total write operations
+    - `ebs_total_read_bytes_total` - Total bytes read
+    - `ebs_total_write_bytes_total` - Total bytes written
+
+    #### Gauge Metrics
+    - `ebs_volume_queue_length` - Current volume queue length
+    - `ebs_volume_performance_exceeded_iops_percent` - IOPS exceeded percentage
+    - `ebs_volume_performance_exceeded_throughput_percent` - Throughput exceeded percentage
+
+    ### Prerequisites
+
+    - OpenShift 4.x or later
+    - Cluster nodes with AWS EBS volumes attached as NVMe devices
+    - Cluster monitoring stack enabled
+
+    ### Documentation
+
+    For detailed documentation, see the [GitHub repository](https://github.com/nephomaniac/ebs-metrics-exporter).
+
+  displayName: EBS Metrics Exporter
+  icon:
+  - base64data: PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZD0iTTEyIDJDNi40OCAyIDIgNi40OCAyIDEyczQuNDggMTAgMTAgMTAgMTAtNC40OCAxMC0xMFMxNy41MiAyIDEyIDJ6bTAgMThjLTQuNDEgMC04LTMuNTktOC04czMuNTktOCA4LTggOCAzLjU5IDggOC0zLjU5IDgtOCA4eiIvPjxwYXRoIGQ9Ik0xMSA3aDJ2Nmgtek0xMSAxNWgydjJoLTJ6Ii8+PC9zdmc+
+    mediatype: image/svg+xml
+  install:
+    spec:
+      clusterPermissions:
+      - rules:
+        - apiGroups:
+          - config.openshift.io
+          resources:
+          - clusterversions
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - authentication.k8s.io
+          resources:
+          - tokenreviews
+          verbs:
+          - create
+        - apiGroups:
+          - authorization.k8s.io
+          resources:
+          - subjectaccessreviews
+          verbs:
+          - create
+        serviceAccountName: ebs-metrics-exporter-operator
+      deployments:
+      - name: ebs-metrics-exporter-operator
+        spec:
+          replicas: 1
+          selector:
+            matchLabels:
+              name: ebs-metrics-exporter-operator
+          strategy: {}
+          template:
+            metadata:
+              labels:
+                name: ebs-metrics-exporter-operator
+            spec:
+              containers:
+              - command:
+                - /ebs-metrics-exporter-operator
+                env:
+                - name: WATCH_NAMESPACE
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.annotations['olm.targetNamespaces']
+                - name: POD_NAME
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.name
+                - name: OPERATOR_NAME
+                  value: ebs-metrics-exporter-operator
+                image: quay.io/app-sre/ebs-metrics-exporter-operator:v0.1.0
+                imagePullPolicy: Always
+                livenessProbe:
+                  httpGet:
+                    path: /healthz
+                    port: 8081
+                  initialDelaySeconds: 15
+                  periodSeconds: 20
+                name: operator
+                ports:
+                - containerPort: 8383
+                  name: metrics
+                  protocol: TCP
+                - containerPort: 8081
+                  name: health
+                  protocol: TCP
+                readinessProbe:
+                  httpGet:
+                    path: /readyz
+                    port: 8081
+                  initialDelaySeconds: 5
+                  periodSeconds: 10
+                resources:
+                  limits:
+                    cpu: 500m
+                    memory: 512Mi
+                  requests:
+                    cpu: 100m
+                    memory: 128Mi
+                securityContext:
+                  allowPrivilegeEscalation: false
+                  capabilities:
+                    drop:
+                    - ALL
+                  runAsNonRoot: true
+              securityContext:
+                runAsNonRoot: true
+              serviceAccountName: ebs-metrics-exporter-operator
+      permissions:
+      - rules:
+        - apiGroups:
+          - ""
+          resources:
+          - configmaps
+          - secrets
+          - services
+          - serviceaccounts
+          - pods
+          - endpoints
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - apps
+          resources:
+          - daemonsets
+          - deployments
+          - replicasets
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - monitoring.coreos.com
+          resources:
+          - servicemonitors
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - ""
+          resources:
+          - events
+          verbs:
+          - create
+          - patch
+        serviceAccountName: ebs-metrics-exporter-operator
+    strategy: deployment
+  installModes:
+  - supported: true
+    type: OwnNamespace
+  - supported: true
+    type: SingleNamespace
+  - supported: false
+    type: MultiNamespace
+  - supported: false
+    type: AllNamespaces
+  keywords:
+  - monitoring
+  - metrics
+  - prometheus
+  - ebs
+  - aws
+  - storage
+  - performance
+  links:
+  - name: EBS Metrics Exporter
+    url: https://github.com/nephomaniac/ebs-metrics-exporter
+  - name: Documentation
+    url: https://github.com/nephomaniac/ebs-metrics-exporter/blob/main/README.md
+  maintainers:
+  - email: support@example.com
+    name: EBS Metrics Exporter Team
+  maturity: alpha
+  provider:
+    name: Red Hat
+  version: 0.1.0
+  relatedImages:
+  - name: ebs-metrics-exporter-operator
+    image: quay.io/app-sre/ebs-metrics-exporter-operator:v0.1.0
+  - name: ebs-metrics-exporter
+    image: quay.io/app-sre/ebs-metrics-exporter:v0.1.0

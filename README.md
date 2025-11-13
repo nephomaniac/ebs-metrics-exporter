@@ -180,6 +180,10 @@ oc exec -n openshift-sre-ebs-metrics $POD -- curl -s localhost:8090/metrics | gr
 
 The operator-based deployment provides a Kubernetes operator that manages the DaemonSet lifecycle and exposes aggregated cluster-wide metrics.
 
+**Deployment Methods:**
+- **Manual Deployment**: Deploy operator directly using YAML manifests (see below)
+- **OLM (Operator Lifecycle Manager)**: Deploy via OperatorHub for automated lifecycle management (see **[OLM.md](OLM.md)**)
+
 #### Architecture
 
 ```
@@ -472,6 +476,8 @@ oc delete -f deploy/
 ### Additional Documentation
 
 - **[BUILD.md](BUILD.md)** - Detailed build instructions, multi-arch builds, FIPS mode
+- **[OLM.md](OLM.md)** - OLM (Operator Lifecycle Manager) deployment guide
+- **[README.operator.md](README.operator.md)** - Operator architecture and development
 - **[QUICKSTART.md](QUICKSTART.md)** - Quick deployment guide with step-by-step instructions
 - **[DEPLOYMENT_SUMMARY.md](DEPLOYMENT_SUMMARY.md)** - Comprehensive deployment architecture reference
 - **[BOILERPLATE.md](BOILERPLATE.md)** - OpenShift boilerplate system documentation

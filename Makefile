@@ -79,4 +79,55 @@ run: build-collector ## Run the collector locally (requires sudo for device acce
 help: ## Display this help
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
+# OLM Bundle variables
+BUNDLE_IMG ?= $(IMAGE_REGISTRY)/$(IMAGE_REPOSITORY)/$(APP_NAME)-bundle:v$(OPERATOR_VERSION)
+CATALOG_IMG ?= $(IMAGE_REGISTRY)/$(IMAGE_REPOSITORY)/$(APP_NAME)-catalog:v$(OPERATOR_VERSION)
+
+# OLM Bundle targets
+.PHONY: bundle
+bundle: ## Generate bundle manifests and metadata
+	@echo "Bundle manifests are located in bundle/ directory"
+	@echo "Update bundle/manifests/ebs-metrics-exporter.clusterserviceversion.yaml with your images"
+
+.PHONY: bundle-build
+bundle-build: ## Build the bundle image
+	docker build -f bundle/bundle.Dockerfile -t $(BUNDLE_IMG) .
+
+.PHONY: bundle-push
+bundle-push: ## Push the bundle image
+	docker push $(BUNDLE_IMG)
+
+.PHONY: bundle-validate
+bundle-validate: ## Validate the bundle using operator-sdk
+	operator-sdk bundle validate ./bundle --select-optional suite=operatorframework
+
+.PHONY: catalog-build
+catalog-build: ## Build a catalog image containing this bundle
+	opm index add --bundles $(BUNDLE_IMG) --tag $(CATALOG_IMG) --container-tool docker
+
+.PHONY: catalog-push
+catalog-push: ## Push the catalog image
+	docker push $(CATALOG_IMG)
+
+.PHONY: olm-deploy
+olm-deploy: ## Deploy operator via OLM (requires OLM to be installed)
+	@echo "Creating CatalogSource..."
+	@cat <<EOF | oc apply -f - \n\
+	apiVersion: operators.coreos.com/v1alpha1\n\
+	kind: CatalogSource\n\
+	metadata:\n\
+	  name: ebs-metrics-exporter-catalog\n\
+	  namespace: openshift-marketplace\n\
+	spec:\n\
+	  sourceType: grpc\n\
+	  image: $(CATALOG_IMG)\n\
+	  displayName: EBS Metrics Exporter\n\
+	  publisher: Red Hat\n\
+	EOF
+	@echo "CatalogSource created. Install operator from OperatorHub."
+
+.PHONY: olm-undeploy
+olm-undeploy: ## Remove OLM catalog source
+	oc delete catalogsource ebs-metrics-exporter-catalog -n openshift-marketplace --ignore-not-found=true
+
 .DEFAULT_GOAL := help
