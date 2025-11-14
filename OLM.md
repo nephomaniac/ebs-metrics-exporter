@@ -116,16 +116,58 @@ The catalog image is what you reference in the CatalogSource resource, which tel
 
 **Installation:**
 
-```bash
-# macOS
-brew install operator-framework/tap/opm
+For complete installation instructions, see the [official OKD documentation](https://docs.okd.io/4.18/cli_reference/opm/cli-opm-install.html).
 
-# Linux
+#### Linux
+
+**Prerequisites:**
+- For RHEL 8, the system meets the opm CLI package requirements by default
+- For other distributions, ensure you have standard utilities like `tar` and `curl`
+
+**Installation Steps:**
+
+```bash
+# Method 1: Download from OpenShift mirror (recommended)
+# Navigate to https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/
+# Download the appropriate opm tarball for your architecture
+
+# Example for Linux x86_64:
+curl -L https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/opm-linux.tar.gz -o opm-linux.tar.gz
+tar xvzf opm-linux.tar.gz
+chmod +x opm
+sudo mv opm /usr/local/bin/
+
+# Method 2: Download from GitHub releases
 export ARCH=$(case $(uname -m) in x86_64) echo -n amd64 ;; aarch64) echo -n arm64 ;; *) echo -n $(uname -m) ;; esac)
 export OS=$(uname | awk '{print tolower($0)}')
-export OPM_DL_URL=https://github.com/operator-framework/operator-registry/releases/download/v1.28.0
-curl -LO ${OPM_DL_URL}/${OS}-${ARCH}-opm
+export OPM_VERSION=v1.28.0
+curl -LO https://github.com/operator-framework/operator-registry/releases/download/${OPM_VERSION}/${OS}-${ARCH}-opm
 chmod +x ${OS}-${ARCH}-opm && sudo mv ${OS}-${ARCH}-opm /usr/local/bin/opm
+
+# Verify installation
+opm version
+```
+
+#### macOS
+
+```bash
+# Method 1: Using Homebrew (recommended)
+brew install operator-framework/tap/opm
+
+# Method 2: Download from OpenShift mirror
+# Navigate to https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/
+# Download the appropriate opm tarball for macOS
+
+curl -L https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/opm-mac.tar.gz -o opm-mac.tar.gz
+tar xvzf opm-mac.tar.gz
+chmod +x opm
+sudo mv opm /usr/local/bin/
+
+# Method 3: Download from GitHub releases
+export ARCH=$(case $(uname -m) in x86_64) echo -n amd64 ;; arm64) echo -n arm64 ;; esac)
+export OPM_VERSION=v1.28.0
+curl -LO https://github.com/operator-framework/operator-registry/releases/download/${OPM_VERSION}/darwin-${ARCH}-opm
+chmod +x darwin-${ARCH}-opm && sudo mv darwin-${ARCH}-opm /usr/local/bin/opm
 
 # Verify installation
 opm version
