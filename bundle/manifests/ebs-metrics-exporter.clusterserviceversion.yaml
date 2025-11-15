@@ -6,7 +6,7 @@ metadata:
     capabilities: Basic Install
     categories: Monitoring
     certified: "false"
-    containerImage: quay.io/app-sre/ebs-metrics-exporter-operator:v0.1.0
+    containerImage: quay.io/app-sre/ebs-metrics-collector-operator:v0.1.0
     createdAt: "2024-01-01T00:00:00Z"
     description: Operator that exports AWS EBS volume performance metrics via Prometheus
     repository: https://github.com/nephomaniac/ebs-metrics-exporter
@@ -87,23 +87,23 @@ spec:
           - subjectaccessreviews
           verbs:
           - create
-        serviceAccountName: ebs-metrics-exporter-operator
+        serviceAccountName: ebs-metrics-collector-operator
       deployments:
-      - name: ebs-metrics-exporter-operator
+      - name: ebs-metrics-collector-operator
         spec:
           replicas: 1
           selector:
             matchLabels:
-              name: ebs-metrics-exporter-operator
+              name: ebs-metrics-collector-operator
           strategy: {}
           template:
             metadata:
               labels:
-                name: ebs-metrics-exporter-operator
+                name: ebs-metrics-collector-operator
             spec:
               containers:
               - command:
-                - /ebs-metrics-exporter-operator
+                - /ebs-metrics-collector-operator
                 env:
                 - name: WATCH_NAMESPACE
                   valueFrom:
@@ -114,8 +114,8 @@ spec:
                     fieldRef:
                       fieldPath: metadata.name
                 - name: OPERATOR_NAME
-                  value: ebs-metrics-exporter-operator
-                image: quay.io/app-sre/ebs-metrics-exporter-operator:v0.1.0
+                  value: ebs-metrics-collector-operator
+                image: quay.io/app-sre/ebs-metrics-collector-operator:v0.1.0
                 imagePullPolicy: Always
                 livenessProbe:
                   httpGet:
@@ -152,7 +152,7 @@ spec:
                   runAsNonRoot: true
               securityContext:
                 runAsNonRoot: true
-              serviceAccountName: ebs-metrics-exporter-operator
+              serviceAccountName: ebs-metrics-collector-operator
       permissions:
       - rules:
         - apiGroups:
@@ -205,7 +205,7 @@ spec:
           verbs:
           - create
           - patch
-        serviceAccountName: ebs-metrics-exporter-operator
+        serviceAccountName: ebs-metrics-collector-operator
     strategy: deployment
   installModes:
   - supported: true
@@ -237,7 +237,7 @@ spec:
     name: Red Hat
   version: 0.1.0
   relatedImages:
-  - name: ebs-metrics-exporter-operator
-    image: quay.io/app-sre/ebs-metrics-exporter-operator:v0.1.0
+  - name: ebs-metrics-collector-operator
+    image: quay.io/app-sre/ebs-metrics-collector-operator:v0.1.0
   - name: ebs-metrics-exporter
     image: quay.io/app-sre/ebs-metrics-exporter:v0.1.0

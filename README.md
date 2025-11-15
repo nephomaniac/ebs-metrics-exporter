@@ -58,12 +58,12 @@ make build-collector
 
 # Build operator binary (Kubernetes)
 make build-operator
-# → Produces: bin/ebs-metrics-exporter-operator
+# → Produces: bin/ebs-metrics-collector-operator
 
 # Build both binaries
 make build
 # → Produces: bin/ebs-metrics-collector
-#             bin/ebs-metrics-exporter-operator
+#             bin/ebs-metrics-collector-operator
 
 # Build collector container image
 make docker-build-collector
@@ -243,7 +243,7 @@ The operator-based deployment provides a Kubernetes operator that manages the Da
 
 ```bash
 # Build operator image
-export IMG_OPERATOR=quay.io/your-org/ebs-metrics-exporter-operator:latest
+export IMG_OPERATOR=quay.io/your-org/ebs-metrics-collector-operator:latest
 make docker-build-operator
 make docker-push-operator
 
@@ -271,22 +271,22 @@ Create operator deployment manifest `operator-deployment.yaml`:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: ebs-metrics-exporter-operator
+  name: ebs-metrics-collector-operator
   namespace: openshift-sre-ebs-metrics
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: ebs-metrics-exporter-operator
+      app: ebs-metrics-collector-operator
   template:
     metadata:
       labels:
-        app: ebs-metrics-exporter-operator
+        app: ebs-metrics-collector-operator
     spec:
       serviceAccountName: ebs-metrics-exporter
       containers:
       - name: operator
-        image: quay.io/your-org/ebs-metrics-exporter-operator:latest
+        image: quay.io/your-org/ebs-metrics-collector-operator:latest
         ports:
         - containerPort: 8383
           name: metrics
@@ -312,8 +312,8 @@ oc apply -f deploy/20_prometheus-k8s_openshift-sre-ebs-metrics.RoleBinding.yaml
 oc apply -f operator-deployment.yaml
 
 # Verify operator is running
-oc get deployment -n openshift-sre-ebs-metrics ebs-metrics-exporter-operator
-oc logs -n openshift-sre-ebs-metrics deployment/ebs-metrics-exporter-operator
+oc get deployment -n openshift-sre-ebs-metrics ebs-metrics-collector-operator
+oc logs -n openshift-sre-ebs-metrics deployment/ebs-metrics-collector-operator
 ```
 
 **4. Deploy the Collector DaemonSet**
@@ -339,7 +339,7 @@ oc get pods -n openshift-sre-ebs-metrics
 
 ```bash
 # Check operator metrics (aggregated cluster-wide)
-oc port-forward -n openshift-sre-ebs-metrics deployment/ebs-metrics-exporter-operator 8383:8383
+oc port-forward -n openshift-sre-ebs-metrics deployment/ebs-metrics-collector-operator 8383:8383
 curl http://localhost:8383/metrics
 
 # Check collector pod metrics (per-node)

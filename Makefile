@@ -67,7 +67,7 @@ build-collector: ## Build the collector binary
 
 .PHONY: build-operator
 build-operator: ## Build the operator binary
-	CGO_ENABLED=0 go build -o bin/ebs-metrics-exporter-operator main.go
+	CGO_ENABLED=0 go build -o bin/ebs-metrics-collector-operator main.go
 
 .PHONY: run
 run: build-collector ## Run the collector locally (requires sudo for device access)

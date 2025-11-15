@@ -19,7 +19,7 @@ Edit the following files to use your container images:
 
 1. **Operator image** - `deploy/30_ebs-metrics-exporter_openshift-sre-ebs-metrics.Deployment.yaml`:
    ```yaml
-   image: quay.io/your-org/ebs-metrics-exporter-operator:latest
+   image: quay.io/your-org/ebs-metrics-collector-operator:latest
    ```
 
 2. **Exporter image** - `k8s/07-daemonset.yaml`:
@@ -37,7 +37,7 @@ oc apply -f deploy/
 oc apply -f k8s/
 
 # Wait for pods to be ready
-oc wait --for=condition=ready pod -l app.kubernetes.io/name=ebs-metrics-exporter-operator -n openshift-sre-ebs-metrics --timeout=120s
+oc wait --for=condition=ready pod -l app.kubernetes.io/name=ebs-metrics-collector-operator -n openshift-sre-ebs-metrics --timeout=120s
 oc wait --for=condition=ready pod -l app.kubernetes.io/component=ebs-metrics-exporter -n openshift-sre-ebs-metrics --timeout=120s
 ```
 
@@ -45,8 +45,8 @@ oc wait --for=condition=ready pod -l app.kubernetes.io/component=ebs-metrics-exp
 
 ```bash
 # Check operator
-oc get deployment -n openshift-sre-ebs-metrics ebs-metrics-exporter-operator
-oc logs -n openshift-sre-ebs-metrics deployment/ebs-metrics-exporter-operator --tail=50
+oc get deployment -n openshift-sre-ebs-metrics ebs-metrics-collector-operator
+oc logs -n openshift-sre-ebs-metrics deployment/ebs-metrics-collector-operator --tail=50
 
 # Check DaemonSet
 oc get daemonset -n openshift-sre-ebs-metrics ebs-metrics-exporter
@@ -77,7 +77,7 @@ This sets up standardized build tooling, CI configuration, and development workf
 
 ```bash
 export REGISTRY=quay.io/your-org
-export OPERATOR_IMAGE=${REGISTRY}/ebs-metrics-exporter-operator:latest
+export OPERATOR_IMAGE=${REGISTRY}/ebs-metrics-collector-operator:latest
 export EXPORTER_IMAGE=${REGISTRY}/ebs-metrics-exporter-daemonset:latest
 ```
 
@@ -144,7 +144,7 @@ endpoints:
 
 ```bash
 # Operator metrics
-oc port-forward -n openshift-sre-ebs-metrics deployment/ebs-metrics-exporter-operator 8383:8383
+oc port-forward -n openshift-sre-ebs-metrics deployment/ebs-metrics-collector-operator 8383:8383
 curl http://localhost:8383/metrics
 
 # Exporter pod metrics  
@@ -230,6 +230,6 @@ oc get endpoints -n openshift-sre-ebs-metrics ebs-metrics-exporter
 
 ## Getting Help
 
-- Check operator logs: `oc logs -n openshift-sre-ebs-metrics deployment/ebs-metrics-exporter-operator`
+- Check operator logs: `oc logs -n openshift-sre-ebs-metrics deployment/ebs-metrics-collector-operator`
 - Check exporter logs: `oc logs -n openshift-sre-ebs-metrics -l app.kubernetes.io/component=ebs-metrics-exporter`
-- Verify RBAC: `oc auth can-i --list --as=system:serviceaccount:openshift-sre-ebs-metrics:ebs-metrics-exporter-operator`
+- Verify RBAC: `oc auth can-i --list --as=system:serviceaccount:openshift-sre-ebs-metrics:ebs-metrics-collector-operator`

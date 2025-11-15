@@ -189,7 +189,7 @@ If upgrading from the operator-based deployment:
 
 1. **Undeploy operator**:
    ```bash
-   kubectl delete deployment ebs-metrics-exporter-operator -n openshift-sre-ebs-metrics
+   kubectl delete deployment ebs-metrics-collector-operator -n openshift-sre-ebs-metrics
    ```
 
 2. **Clean up old DaemonSet** (if exists):

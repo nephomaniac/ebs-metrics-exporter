@@ -1,5 +1,5 @@
 # Image URL to use for building/pushing image targets
-IMG_OPERATOR ?= quay.io/openshift/ebs-metrics-exporter-operator:latest
+IMG_OPERATOR ?= quay.io/openshift/ebs-metrics-collector-operator:latest
 IMG_EXPORTER ?= quay.io/openshift/ebs-metrics-exporter:latest
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
@@ -36,7 +36,7 @@ test: fmt vet ## Run tests.
 
 .PHONY: build
 build: fmt vet ## Build operator binary.
-	go build -o bin/ebs-metrics-exporter-operator main.go
+	go build -o bin/ebs-metrics-collector-operator main.go
 
 .PHONY: run
 run: fmt vet ## Run the operator from your host.

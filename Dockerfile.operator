@@ -17,15 +17,15 @@ COPY controllers/ controllers/
 COPY pkg/ pkg/
 
 # Build the operator
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o ebs-metrics-exporter-operator main.go
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o ebs-metrics-collector-operator main.go
 
 # Final stage
 FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
 
 WORKDIR /
 
-COPY --from=builder /workspace/ebs-metrics-exporter-operator .
+COPY --from=builder /workspace/ebs-metrics-collector-operator .
 
 USER 65532:65532
 
-ENTRYPOINT ["/ebs-metrics-exporter-operator"]
+ENTRYPOINT ["/ebs-metrics-collector-operator"]

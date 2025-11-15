@@ -126,10 +126,10 @@ All metrics include labels: `cluster_id`, `node`, `device`, `volume_id`
 make -f Makefile.operator build
 
 # Build operator container image
-make -f Makefile.operator docker-build-operator IMG_OPERATOR=<your-registry>/ebs-metrics-exporter-operator:latest
+make -f Makefile.operator docker-build-operator IMG_OPERATOR=<your-registry>/ebs-metrics-collector-operator:latest
 
 # Push operator image
-make -f Makefile.operator docker-push-operator IMG_OPERATOR=<your-registry>/ebs-metrics-exporter-operator:latest
+make -f Makefile.operator docker-push-operator IMG_OPERATOR=<your-registry>/ebs-metrics-collector-operator:latest
 ```
 
 ### Build the Exporter DaemonSet
@@ -164,7 +164,7 @@ make -f Makefile.operator docker-push-all IMG_OPERATOR=<operator-image> IMG_EXPO
 
 1. Update the operator image in `deploy/30_ebs-metrics-exporter_openshift-sre-ebs-metrics.Deployment.yaml`:
    ```yaml
-   image: <your-registry>/ebs-metrics-exporter-operator:latest
+   image: <your-registry>/ebs-metrics-collector-operator:latest
    ```
 
 2. Deploy the operator:
@@ -175,7 +175,7 @@ make -f Makefile.operator docker-push-all IMG_OPERATOR=<operator-image> IMG_EXPO
 3. Verify the operator is running:
    ```bash
    oc get deployment -n openshift-sre-ebs-metrics
-   oc logs -n openshift-sre-ebs-metrics deployment/ebs-metrics-exporter-operator
+   oc logs -n openshift-sre-ebs-metrics deployment/ebs-metrics-collector-operator
    ```
 
 ### Deploy the Exporter DaemonSet
@@ -203,7 +203,7 @@ make -f Makefile.operator docker-push-all IMG_OPERATOR=<operator-image> IMG_EXPO
 ### Operator Metrics
 ```bash
 # Port-forward to operator pod
-oc port-forward -n openshift-sre-ebs-metrics deployment/ebs-metrics-exporter-operator 8383:8383
+oc port-forward -n openshift-sre-ebs-metrics deployment/ebs-metrics-collector-operator 8383:8383
 
 # Query metrics
 curl http://localhost:8383/metrics
@@ -296,10 +296,10 @@ Prometheus requires:
 ### Operator not starting
 ```bash
 # Check operator logs
-oc logs -n openshift-sre-ebs-metrics deployment/ebs-metrics-exporter-operator
+oc logs -n openshift-sre-ebs-metrics deployment/ebs-metrics-collector-operator
 
 # Check for RBAC issues
-oc auth can-i get clusterversions --as=system:serviceaccount:openshift-sre-ebs-metrics:ebs-metrics-exporter-operator
+oc auth can-i get clusterversions --as=system:serviceaccount:openshift-sre-ebs-metrics:ebs-metrics-collector-operator
 ```
 
 ### DaemonSet pods failing

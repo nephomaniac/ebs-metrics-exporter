@@ -61,7 +61,7 @@ go mod tidy
 
 This project has two binaries:
 1. **Collector** (`ebs-metrics-collector`) - Standalone binary that queries NVMe devices and exposes Prometheus metrics
-2. **Operator** (`ebs-metrics-exporter-operator`) - Kubernetes operator that manages collector DaemonSets
+2. **Operator** (`ebs-metrics-collector-operator`) - Kubernetes operator that manages collector DaemonSets
 
 ### Quick Build Commands
 
@@ -72,7 +72,7 @@ make build-collector
 
 # Build operator binary (for Kubernetes operator)
 make build-operator
-# Output: bin/ebs-metrics-exporter-operator
+# Output: bin/ebs-metrics-collector-operator
 
 # Build both binaries
 make build
@@ -108,7 +108,7 @@ make coverage
 make docker-build-operator
 
 # With custom image name
-make docker-build-operator IMG_OPERATOR=quay.io/your-org/ebs-metrics-exporter-operator:v0.1.0
+make docker-build-operator IMG_OPERATOR=quay.io/your-org/ebs-metrics-collector-operator:v0.1.0
 ```
 
 ### Build Exporter DaemonSet Container
@@ -138,7 +138,7 @@ make docker-build
 
 ```bash
 # Push operator
-make docker-push-operator IMG_OPERATOR=quay.io/your-org/ebs-metrics-exporter-operator:v0.1.0
+make docker-push-operator IMG_OPERATOR=quay.io/your-org/ebs-metrics-collector-operator:v0.1.0
 ```
 
 ### Push Exporter Image
@@ -188,7 +188,7 @@ For development with debug symbols:
 
 ```bash
 # Build with debug info
-go build -gcflags="all=-N -l" -o bin/ebs-metrics-exporter-operator main.go
+go build -gcflags="all=-N -l" -o bin/ebs-metrics-collector-operator main.go
 ```
 
 ### Static Binary
@@ -197,7 +197,7 @@ For fully static binary (no dynamic linking):
 
 ```bash
 # Build static binary
-CGO_ENABLED=0 go build -a -installsuffix cgo -o bin/ebs-metrics-exporter-operator main.go
+CGO_ENABLED=0 go build -a -installsuffix cgo -o bin/ebs-metrics-collector-operator main.go
 ```
 
 ## Multi-Architecture Builds
@@ -209,7 +209,7 @@ CGO_ENABLED=0 go build -a -installsuffix cgo -o bin/ebs-metrics-exporter-operato
 GOARCH=arm64 make go-build
 
 # Build ARM64 container
-docker buildx build --platform linux/arm64 -t ebs-metrics-exporter-operator:arm64 -f Dockerfile.operator .
+docker buildx build --platform linux/arm64 -t ebs-metrics-collector-operator:arm64 -f Dockerfile.operator .
 ```
 
 ### Build for AMD64
@@ -219,7 +219,7 @@ docker buildx build --platform linux/arm64 -t ebs-metrics-exporter-operator:arm6
 GOARCH=amd64 make go-build
 
 # Build AMD64 container
-docker buildx build --platform linux/amd64 -t ebs-metrics-exporter-operator:amd64 -f Dockerfile.operator .
+docker buildx build --platform linux/amd64 -t ebs-metrics-collector-operator:amd64 -f Dockerfile.operator .
 ```
 
 ### Multi-Arch Manifest
@@ -227,7 +227,7 @@ docker buildx build --platform linux/amd64 -t ebs-metrics-exporter-operator:amd6
 ```bash
 # Create multi-arch manifest
 docker buildx build --platform linux/amd64,linux/arm64 \
-  -t quay.io/your-org/ebs-metrics-exporter-operator:latest \
+  -t quay.io/your-org/ebs-metrics-collector-operator:latest \
   -f Dockerfile.operator \
   --push .
 ```
@@ -359,7 +359,7 @@ make boilerplate-update
 
 ```bash
 # Build with custom tags
-go build -tags "mytag anothertag" -o bin/ebs-metrics-exporter-operator main.go
+go build -tags "mytag anothertag" -o bin/ebs-metrics-collector-operator main.go
 ```
 
 ### Vendoring Dependencies
@@ -369,7 +369,7 @@ go build -tags "mytag anothertag" -o bin/ebs-metrics-exporter-operator main.go
 go mod vendor
 
 # Build using vendor
-go build -mod=vendor -o bin/ebs-metrics-exporter-operator main.go
+go build -mod=vendor -o bin/ebs-metrics-collector-operator main.go
 ```
 
 ### Cross-Compilation
@@ -379,7 +379,7 @@ go build -mod=vendor -o bin/ebs-metrics-exporter-operator main.go
 GOOS=linux GOARCH=amd64 make go-build
 
 # Windows binary
-GOOS=windows GOARCH=amd64 go build -o bin/ebs-metrics-exporter-operator.exe main.go
+GOOS=windows GOARCH=amd64 go build -o bin/ebs-metrics-collector-operator.exe main.go
 ```
 
 ## Build Artifacts
@@ -388,7 +388,7 @@ After successful builds:
 
 ```
 bin/
-├── ebs-metrics-exporter-operator   # Operator binary
+├── ebs-metrics-collector-operator   # Operator binary
 └── ebs-metrics-collector            # Exporter DaemonSet binary
 
 build/_output/bin/
@@ -396,7 +396,7 @@ build/_output/bin/
 ```
 
 Container images:
-- `ebs-metrics-exporter-operator:latest` - Operator
+- `ebs-metrics-collector-operator:latest` - Operator
 - `ebs-metrics-exporter:latest` - Collector (default)
 
 ## Makefile Targets
@@ -452,7 +452,7 @@ IMAGE_REPOSITORY=your-org
 IMG=quay.io/your-org/ebs-metrics-exporter:v1.0.0
 
 # Operator image (when using Makefile.operator)
-IMG_OPERATOR=quay.io/your-org/ebs-metrics-exporter-operator:latest
+IMG_OPERATOR=quay.io/your-org/ebs-metrics-collector-operator:latest
 
 # Exporter DaemonSet image (when using Makefile.operator)
 IMG_EXPORTER=quay.io/your-org/ebs-metrics-exporter:latest

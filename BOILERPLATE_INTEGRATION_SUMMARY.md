@@ -87,7 +87,7 @@ make docker-push      # Push container images
 ### 4. Multi-Image Support
 
 The project builds two container images:
-1. **Operator** (`ebs-metrics-exporter-operator`)
+1. **Operator** (`ebs-metrics-collector-operator`)
 2. **Exporter DaemonSet** (`ebs-metrics-exporter-daemonset`)
 
 Both are handled automatically by the boilerplate system.

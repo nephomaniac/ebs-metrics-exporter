@@ -15,7 +15,7 @@
 bin/
 build/_output/
 ebs-metrics-exporter
-ebs-metrics-exporter-operator
+ebs-metrics-collector-operator
 
 # Go workspace file
 go.work

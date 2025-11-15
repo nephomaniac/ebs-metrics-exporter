@@ -218,8 +218,8 @@ export IMAGE_REGISTRY=quay.io/your-org
 export OPERATOR_VERSION=0.1.0
 
 # Build operator image
-make docker-build-operator IMG_OPERATOR=${IMAGE_REGISTRY}/ebs-metrics-exporter-operator:v${OPERATOR_VERSION}
-make docker-push-operator IMG_OPERATOR=${IMAGE_REGISTRY}/ebs-metrics-exporter-operator:v${OPERATOR_VERSION}
+make docker-build-operator IMG_OPERATOR=${IMAGE_REGISTRY}/ebs-metrics-collector-operator:v${OPERATOR_VERSION}
+make docker-push-operator IMG_OPERATOR=${IMAGE_REGISTRY}/ebs-metrics-collector-operator:v${OPERATOR_VERSION}
 
 # Build collector image
 make docker-build-collector IMG=${IMAGE_REGISTRY}/ebs-metrics-exporter:v${OPERATOR_VERSION}
@@ -235,15 +235,15 @@ spec:
   install:
     spec:
       deployments:
-      - name: ebs-metrics-exporter-operator
+      - name: ebs-metrics-collector-operator
         spec:
           template:
             spec:
               containers:
-              - image: quay.io/your-org/ebs-metrics-exporter-operator:v0.1.0
+              - image: quay.io/your-org/ebs-metrics-collector-operator:v0.1.0
   relatedImages:
-  - name: ebs-metrics-exporter-operator
-    image: quay.io/your-org/ebs-metrics-exporter-operator:v0.1.0
+  - name: ebs-metrics-collector-operator
+    image: quay.io/your-org/ebs-metrics-collector-operator:v0.1.0
   - name: ebs-metrics-exporter
     image: quay.io/your-org/ebs-metrics-exporter:v0.1.0
 ```
@@ -408,7 +408,7 @@ The validator checks for:
 spec:
   relatedImages:
   - name: operator
-    image: quay.io/your-org/ebs-metrics-exporter-operator:v0.1.0
+    image: quay.io/your-org/ebs-metrics-collector-operator:v0.1.0
 ```
 
 **Error: Invalid channel**
@@ -515,7 +515,7 @@ oc get csv -n openshift-sre-ebs-metrics
 oc describe csv -n openshift-sre-ebs-metrics <csv-name>
 
 # Check operator pod logs
-oc logs -n openshift-sre-ebs-metrics deployment/ebs-metrics-exporter-operator
+oc logs -n openshift-sre-ebs-metrics deployment/ebs-metrics-collector-operator
 
 # Check OLM operator logs
 oc logs -n openshift-operator-lifecycle-manager deployment/olm-operator
