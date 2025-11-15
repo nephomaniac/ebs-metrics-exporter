@@ -54,12 +54,37 @@ For detailed build instructions, environment variables, and advanced build optio
 ```bash
 # Build collector binary (standalone)
 make build-collector
+# → Produces: bin/ebs-metrics-collector
 
 # Build operator binary (Kubernetes)
 make build-operator
+# → Produces: bin/ebs-metrics-exporter-operator
 
-# Build both
+# Build both binaries
 make build
+# → Produces: bin/ebs-metrics-collector
+#             bin/ebs-metrics-exporter-operator
+
+# Build collector container image
+make docker-build-collector
+# → Produces: ${IMG} (default: quay.io/app-sre/ebs-metrics-exporter:latest)
+
+# Build operator container image
+make docker-build-operator
+# → Produces: ${IMG}-operator
+
+# Build both container images
+make docker-build-all
+# → Produces: ${IMG}
+#             ${IMG}-operator
+
+# Build OLM bundle image
+make bundle-build
+# → Produces: ${BUNDLE_IMG} (default: quay.io/app-sre/ebs-metrics-exporter-bundle:v${OPERATOR_VERSION})
+
+# Build OLM catalog image
+make catalog-build
+# → Produces: ${CATALOG_IMG} (default: quay.io/app-sre/ebs-metrics-exporter-catalog:v${OPERATOR_VERSION})
 ```
 
 ## Standalone Deployment
