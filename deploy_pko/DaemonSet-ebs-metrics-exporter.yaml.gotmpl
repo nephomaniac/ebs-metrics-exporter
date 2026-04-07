@@ -1,0 +1,101 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: ebs-metrics-exporter
+  namespace: openshift-sre-ebs-metrics
+  annotations:
+    package-operator.run/phase: deploy
+    package-operator.run/collision-protection: IfNoController
+  labels:
+    app.kubernetes.io/name: ebs-metrics-exporter
+    app.kubernetes.io/component: metrics-exporter
+    app.kubernetes.io/part-of: sre-platform
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ebs-metrics-exporter
+      app.kubernetes.io/component: metrics-exporter
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ebs-metrics-exporter
+        app.kubernetes.io/component: metrics-exporter
+        app.kubernetes.io/part-of: sre-platform
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8090"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: ebs-metrics-exporter
+      hostNetwork: false
+      hostPID: false
+      hostIPC: false
+      nodeSelector:
+        kubernetes.io/os: linux
+      tolerations:
+      - operator: Exists
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 1
+            preference:
+              matchExpressions:
+              - key: node-role.kubernetes.io/infra
+                operator: Exists
+      containers:
+      - name: ebs-metrics-exporter
+        image: '{{ .config.image }}'
+        imagePullPolicy: Always
+        command:
+        - /ebs-metrics-exporter
+        args:
+        - --device={{ .config.device }}
+        - --port=8090
+        ports:
+        - name: metrics
+          containerPort: 8090
+          protocol: TCP
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: metrics
+          initialDelaySeconds: 15
+          periodSeconds: 20
+          timeoutSeconds: 3
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: metrics
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
+        securityContext:
+          capabilities:
+            add:
+            - SYS_ADMIN
+          allowPrivilegeEscalation: true
+          readOnlyRootFilesystem: true
+          runAsNonRoot: false
+          runAsUser: 0
+        volumeMounts:
+        - name: dev
+          mountPath: /dev
+          readOnly: true
+      volumes:
+      - name: dev
+        hostPath:
+          path: /dev
+          type: Directory

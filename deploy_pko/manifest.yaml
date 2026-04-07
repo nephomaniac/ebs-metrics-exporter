@@ -1,0 +1,38 @@
+apiVersion: manifests.package-operator.run/v1alpha1
+kind: PackageManifest
+metadata:
+  name: ebs-metrics-exporter
+  annotations:
+    name: annotation
+spec:
+  scopes:
+  - Cluster
+  phases:
+  - name: crds
+  - name: namespace
+  - name: rbac
+  - name: deploy
+  availabilityProbes:
+  - probes:
+    - condition:
+        type: Available
+        status: 'True'
+    - fieldsEqual:
+        fieldA: .status.numberReady
+        fieldB: .status.desiredNumberScheduled
+    selector:
+      kind:
+        group: apps
+        kind: DaemonSet
+  config:
+    openAPIV3Schema:
+      type: object
+      properties:
+        image:
+          description: EBS metrics exporter image to deploy
+          type: string
+          default: ""
+        device:
+          description: NVMe device path to monitor
+          type: string
+          default: "/dev/nvme1n1"

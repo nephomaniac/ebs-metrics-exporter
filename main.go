@@ -3,155 +3,109 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
+	"log"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
-	"k8s.io/apimachinery/pkg/runtime"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/cache"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/healthz"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
-
-	customMetrics "github.com/openshift/operator-custom-metrics/pkg/metrics"
-
-	operatorConfig "github.com/nephomaniac/ebs-metrics-exporter/config"
-	"github.com/nephomaniac/ebs-metrics-exporter/controllers/daemonset"
-	"github.com/nephomaniac/ebs-metrics-exporter/pkg/metrics"
-
-	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
-	configv1 "github.com/openshift/api/config/v1"
+	"github.com/nephomaniac/ebs-metrics-exporter/pkg/collector"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 var (
-	scheme   = runtime.NewScheme()
-	setupLog = ctrl.Log.WithName("setup")
+	devicePath = flag.String("device", "/dev/nvme1n1", "NVMe device path to monitor")
+	port       = flag.Int("port", 8090, "Port to serve metrics on")
+	version    = "dev"
+	commit     = "unknown"
+	buildDate  = "unknown"
 )
 
-func init() {
-	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-	utilruntime.Must(appsv1.AddToScheme(scheme))
-	utilruntime.Must(corev1.AddToScheme(scheme))
-	utilruntime.Must(configv1.AddToScheme(scheme))
-}
-
 func main() {
-	var metricsAddr string
-	var enableLeaderElection bool
-	var probeAddr string
-	
-	flag.StringVar(&metricsAddr, "metrics-bind-address", ":"+operatorConfig.MetricsPort, "The address the metric endpoint binds to.")
-	flag.StringVar(&probeAddr, "health-probe-bind-address", operatorConfig.HealthProbeAddress, "The address the probe endpoint binds to.")
-	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
-		"Enable leader election for controller manager. "+
-			"Enabling this will ensure there is only one active controller manager.")
-	
-	opts := zap.Options{
-		Development: true,
-	}
-	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
 
-	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+	log.Printf("EBS Metrics Exporter starting")
+	log.Printf("Version: %s, Commit: %s, BuildDate: %s", version, commit, buildDate)
+	log.Printf("Monitoring device: %s", *devicePath)
 
-	// Get cluster ID from ClusterVersion
-	clusterId := getClusterID()
-	if clusterId == "" {
-		setupLog.Info("Warning: Could not retrieve cluster ID, using 'unknown'")
-		clusterId = "unknown"
-	}
-	setupLog.Info("Retrieved cluster ID", "clusterId", clusterId)
-
-	// Define namespaces to watch
-	watchNamespaces := map[string]cache.Config{
-		operatorConfig.OperatorNamespace: {},
+	// Create EBS collector
+	ebsCollector, err := collector.NewEBSCollector(*devicePath)
+	if err != nil {
+		log.Fatalf("Failed to create EBS collector: %v", err)
 	}
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme: scheme,
-		Metrics: metricsserver.Options{
-			BindAddress: "0", // Disable default metrics, we'll use custom metrics server
-		},
-		HealthProbeBindAddress: probeAddr,
-		LeaderElection:         enableLeaderElection,
-		LeaderElectionID:       "ebs-metrics-exporter-lock",
-		Cache: cache.Options{
-			DefaultNamespaces: watchNamespaces,
-		},
+	log.Printf("Initialized collector for volume: %s", ebsCollector.GetVolumeID())
+
+	// Register collector with Prometheus
+	registry := prometheus.NewRegistry()
+	registry.MustRegister(ebsCollector)
+
+	// Create HTTP server
+	mux := http.NewServeMux()
+
+	// Metrics endpoint
+	mux.Handle("/metrics", promhttp.HandlerFor(registry, promhttp.HandlerOpts{}))
+
+	// Landing page
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, `<html>
+<head><title>EBS Metrics Exporter</title></head>
+<body>
+<h1>EBS Metrics Exporter</h1>
+<p><a href="/metrics">Metrics</a></p>
+<dl>
+<dt>Version</dt><dd>%s</dd>
+<dt>Device</dt><dd>%s</dd>
+<dt>Volume ID</dt><dd>%s</dd>
+</dl>
+</body>
+</html>
+`, version, ebsCollector.GetDevice(), ebsCollector.GetVolumeID())
 	})
-	if err != nil {
-		setupLog.Error(err, "unable to start manager")
-		os.Exit(1)
+
+	// Health check endpoint
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, "ok")
+	})
+
+	// Readiness check endpoint
+	mux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, "ready")
+	})
+
+	addr := fmt.Sprintf(":%d", *port)
+	server := &http.Server{
+		Addr:    addr,
+		Handler: mux,
 	}
 
-	// Initialize metrics aggregator
-	metricsAggregator := metrics.GetMetricsAggregator(clusterId)
+	// Start HTTP server in a goroutine
+	go func() {
+		log.Printf("Starting HTTP server on %s", addr)
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("HTTP server failed: %v", err)
+		}
+	}()
 
-	// Setup DaemonSet controller
-	if err = (&daemonset.DaemonSetReconciler{
-		Client:            mgr.GetClient(),
-		Scheme:            mgr.GetScheme(),
-		MetricsAggregator: metricsAggregator,
-		ClusterId:         clusterId,
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "DaemonSet")
-		os.Exit(1)
+	// Wait for interrupt signal
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	<-stop
+
+	log.Println("Shutting down gracefully...")
+
+	// Graceful shutdown with 10 second timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := server.Shutdown(ctx); err != nil {
+		log.Printf("HTTP server shutdown error: %v", err)
 	}
 
-	// Configure custom metrics server
-	setupLog.Info("Configuring custom metrics server", "port", operatorConfig.MetricsPort)
-	metricsConfig := customMetrics.NewBuilder(operatorConfig.OperatorNamespace, operatorConfig.OperatorName).
-		WithPath("/metrics").
-		WithPort(operatorConfig.MetricsPort).
-		WithServiceMonitor().
-		WithCollectors(metricsAggregator.GetMetrics()).
-		GetConfig()
-
-	if err := customMetrics.ConfigureMetrics(context.TODO(), *metricsConfig); err != nil {
-		setupLog.Error(err, "unable to configure custom metrics")
-		os.Exit(1)
-	}
-
-	// Add health and readiness probes
-	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
-		setupLog.Error(err, "unable to set up health check")
-		os.Exit(1)
-	}
-	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
-		setupLog.Error(err, "unable to set up ready check")
-		os.Exit(1)
-	}
-
-	setupLog.Info("starting manager")
-	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
-		setupLog.Error(err, "problem running manager")
-		os.Exit(1)
-	}
-}
-
-// getClusterID retrieves the cluster ID from the ClusterVersion resource
-func getClusterID() string {
-	_, err := ctrl.GetConfig()
-	if err != nil {
-		setupLog.Error(err, "unable to get kubeconfig")
-		return ""
-	}
-
-	c, err := client.New(ctrl.GetConfigOrDie(), client.Options{Scheme: scheme})
-	if err != nil {
-		setupLog.Error(err, "unable to create client")
-		return ""
-	}
-
-	clusterVersion := &configv1.ClusterVersion{}
-	err = c.Get(context.TODO(), client.ObjectKey{Name: "version"}, clusterVersion)
-	if err != nil {
-		setupLog.Error(err, "unable to get ClusterVersion")
-		return ""
-	}
-
-	return string(clusterVersion.Spec.ClusterID)
+	log.Println("Exporter stopped")
 }
