@@ -1,395 +1,344 @@
 # EBS Metrics Exporter
 
-A Prometheus exporter for Amazon EBS (Elastic Block Store) performance metrics. This Go application queries EBS NVMe device statistics via IOCTLs and exposes them as Prometheus metrics through an HTTP server.
+A lightweight Prometheus exporter for Amazon EBS (Elastic Block Store) performance metrics. Collects NVMe device statistics via IOCTLs and exposes them as Prometheus metrics.
 
-This is a Go port of the Python `ebs_script.py` with integrated HTTP server for real-time metrics collection.
+**Architecture**: Single Go binary deployed as DaemonSet via Package Operator (PKO).
 
-## Features
+## Quick Start (Development Workflow)
 
-- Queries EBS volume performance metrics directly from NVMe devices
-- Exposes metrics in Prometheus format via HTTP endpoint
-- Tracks volume and instance IOPS/throughput limits
-- Monitors read/write operations, bytes, and queue length
-- Calculates percentage of time limits were exceeded
-- Compatible with Prometheus scraping
+### Prerequisites
+
+- Go 1.22+
+- Docker or Podman
+- OpenShift CLI (`oc`) with cluster access
+- Quay.io account
+
+### 1. Set Your Image Repository
+
+```bash
+# Set your personal Quay.io repository
+export QUAY_USER="your-quay-username"
+export IMG="quay.io/${QUAY_USER}/ebs-metrics-exporter:test"
+export IMG_PKO="quay.io/${QUAY_USER}/ebs-metrics-exporter-pko:test"
+
+# Or set in your shell profile (~/.bashrc, ~/.zshrc)
+echo "export QUAY_USER=your-quay-username" >> ~/.zshrc
+```
+
+### 2. Build and Push Images
+
+```bash
+# Build both images (application + PKO package)
+make dev-build
+
+# Push to your Quay.io repository
+make dev-push
+
+# Or do both in one command
+make dev-build-push
+```
+
+<details>
+<summary>What this does</summary>
+
+- Builds application image from `Dockerfile` → `quay.io/${QUAY_USER}/ebs-metrics-exporter:test`
+- Builds PKO package image from `build/Dockerfile.pko` → `quay.io/${QUAY_USER}/ebs-metrics-exporter-pko:test`
+- Pushes both to your Quay.io repository
+</details>
+
+### 3. Deploy to Test Cluster
+
+```bash
+# Login to your OpenShift cluster
+oc login https://api.your-cluster.com
+
+# Deploy using PKO
+make dev-deploy
+
+# Or deploy using legacy YAML (non-PKO)
+make deploy-legacy IMG=${IMG}
+```
+
+<details>
+<summary>What this does</summary>
+
+**PKO Deployment** (`make dev-deploy`):
+- Creates temporary rendered manifests in `_output/pko/`
+- Replaces `{{ .config.image }}` with your `${IMG}`
+- Applies all manifests to cluster
+- Creates namespace, RBAC, DaemonSet, ServiceMonitor
+
+**Legacy Deployment** (`make deploy-legacy`):
+- Uses static YAML from `deploy/` directory
+- Replaces `REPLACE_IMAGE` placeholder with your image
+- Useful for quick testing without PKO
+</details>
+
+### 4. Verify Deployment
+
+```bash
+# Check DaemonSet status
+make dev-status
+
+# View logs from all pods
+make dev-logs
+
+# Test metrics endpoint
+make dev-metrics
+```
+
+### 5. Make Changes and Iterate
+
+```bash
+# Edit code
+vim main.go
+
+# Rebuild, push, and redeploy
+make dev-rebuild
+
+# Or do it step by step
+make dev-build
+make dev-push
+make dev-restart  # Restarts DaemonSet to pull new image
+```
+
+### 6. Clean Up
+
+```bash
+# Remove from cluster
+make dev-undeploy
+
+# Remove local build artifacts
+make clean
+```
+
+## Development Workflow Details
+
+### Building Locally
+
+```bash
+# Build Go binary (local architecture)
+make build
+
+# Build Go binary for Linux/amd64 (OpenShift target)
+make build-linux
+
+# Run locally (requires sudo for NVMe device access)
+sudo ./bin/ebs-metrics-exporter --device /dev/nvme1n1 --port 8090
+```
+
+### Container Images
+
+Two images are built:
+
+**1. Application Image** (`ebs-metrics-exporter:test`)
+- Contains the Go binary
+- Built from `Dockerfile`
+- Runs on cluster nodes as DaemonSet pods
+
+**2. PKO Package Image** (`ebs-metrics-exporter-pko:test`)
+- Contains deployment manifests
+- Built from `build/Dockerfile.pko`
+- Used by Package Operator to deploy the application
+
+### Image Repositories
+
+**Development** (your personal repo):
+```bash
+quay.io/${QUAY_USER}/ebs-metrics-exporter:test
+quay.io/${QUAY_USER}/ebs-metrics-exporter-pko:test
+```
+
+**Production** (app-sre managed):
+```bash
+quay.io/app-sre/ebs-metrics-exporter:v1.0.0
+quay.io/app-sre/ebs-metrics-exporter-pko:v1.0.0
+```
+
+### Deployment Methods
+
+#### Option 1: PKO Deployment (Recommended)
+
+Uses Package Operator to deploy from `deploy_pko/` manifests.
+
+```bash
+# Deploy
+make dev-deploy
+
+# Check deployment
+oc get packagedeployment -A  # If using PKO operator
+oc get daemonset -n openshift-sre-ebs-metrics
+
+# Undeploy
+make dev-undeploy
+```
+
+#### Option 2: Legacy YAML Deployment
+
+Uses static manifests from `deploy/` directory.
+
+```bash
+# Deploy
+make deploy-legacy IMG=quay.io/${QUAY_USER}/ebs-metrics-exporter:test
+
+# Update image
+oc set image daemonset/ebs-metrics-exporter \
+  ebs-metrics-exporter=quay.io/${QUAY_USER}/ebs-metrics-exporter:test \
+  -n openshift-sre-ebs-metrics
+
+# Undeploy
+make undeploy
+```
+
+## Testing
+
+### Unit Tests
+
+```bash
+# Run all tests
+make test
+
+# Run tests with coverage
+make test-coverage
+
+# View coverage report
+open coverage.html
+```
+
+### Integration Testing
+
+```bash
+# Deploy to cluster
+make dev-deploy
+
+# Check pod is running
+oc get pods -n openshift-sre-ebs-metrics
+
+# Get a pod name
+POD=$(oc get pods -n openshift-sre-ebs-metrics -l app.kubernetes.io/name=ebs-metrics-exporter -o jsonpath='{.items[0].metadata.name}')
+
+# Test metrics endpoint
+oc exec -n openshift-sre-ebs-metrics $POD -- curl -s localhost:8090/metrics | grep ^ebs_
+
+# Check for specific metrics
+oc exec -n openshift-sre-ebs-metrics $POD -- curl -s localhost:8090/metrics | grep ebs_volume_queue_length
+
+# View logs
+oc logs -n openshift-sre-ebs-metrics $POD
+
+# Port-forward for local testing
+oc port-forward -n openshift-sre-ebs-metrics $POD 8090:8090
+curl http://localhost:8090/metrics
+```
+
+### Prometheus Integration
+
+```bash
+# Check ServiceMonitor is created
+oc get servicemonitor -n openshift-sre-ebs-metrics
+
+# Verify Prometheus is scraping
+# Navigate to OpenShift Console → Observe → Metrics
+# Query: {__name__=~"ebs_.*"}
+```
+
+## Makefile Targets Reference
+
+### Development Targets
+
+| Target | Description |
+|--------|-------------|
+| `make dev-build` | Build both application and PKO package images |
+| `make dev-push` | Push both images to your Quay.io repository |
+| `make dev-build-push` | Build and push both images |
+| `make dev-deploy` | Deploy to cluster using PKO manifests |
+| `make dev-undeploy` | Remove from cluster |
+| `make dev-status` | Show deployment status |
+| `make dev-logs` | View logs from all pods |
+| `make dev-metrics` | Test metrics endpoint from a pod |
+| `make dev-restart` | Restart DaemonSet (pulls latest image) |
+| `make dev-rebuild` | Build, push, and restart (full iteration) |
+
+### Build Targets
+
+| Target | Description |
+|--------|-------------|
+| `make build` | Build Go binary for local architecture |
+| `make build-linux` | Build Go binary for Linux/amd64 |
+| `make docker-build` | Build application container image |
+| `make docker-push` | Push application image to registry |
+| `make podman-build` | Build using podman (macOS) |
+| `make podman-push` | Push using podman |
+
+### Testing Targets
+
+| Target | Description |
+|--------|-------------|
+| `make test` | Run unit tests |
+| `make test-coverage` | Run tests with coverage report |
+| `make fmt` | Format Go code |
+| `make vet` | Run go vet |
+| `make tidy` | Run go mod tidy |
+| `make go-check` | Run linter (golangci-lint) |
+
+### Deployment Targets
+
+| Target | Description |
+|--------|-------------|
+| `make deploy-legacy` | Deploy using legacy YAML (non-PKO) |
+| `make undeploy` | Remove legacy deployment |
+| `make pko-validate` | Validate PKO manifests |
+
+### Cleanup Targets
+
+| Target | Description |
+|--------|-------------|
+| `make clean` | Remove build artifacts |
 
 ## Metrics Exported
 
 ### Counter Metrics
-- `ebs_volume_performance_exceeded_iops_total` - Total time (microseconds) volume IOPS limit was exceeded
-- `ebs_volume_performance_exceeded_throughput_total` - Total time (microseconds) volume throughput limit was exceeded
-- `ebs_instance_performance_exceeded_iops_total` - Total time (microseconds) instance IOPS limit was exceeded
-- `ebs_instance_performance_exceeded_throughput_total` - Total time (microseconds) instance throughput limit was exceeded
-- `ebs_total_read_ops_total` - Total number of read operations
-- `ebs_total_write_ops_total` - Total number of write operations
+- `ebs_volume_performance_exceeded_iops_total` - Volume IOPS limit exceeded (microseconds)
+- `ebs_volume_performance_exceeded_throughput_total` - Volume throughput limit exceeded (microseconds)
+- `ebs_instance_performance_exceeded_iops_total` - Instance IOPS limit exceeded (microseconds)
+- `ebs_instance_performance_exceeded_throughput_total` - Instance throughput limit exceeded (microseconds)
+- `ebs_total_read_ops_total` - Total read operations
+- `ebs_total_write_ops_total` - Total write operations
 - `ebs_total_read_bytes_total` - Total bytes read
 - `ebs_total_write_bytes_total` - Total bytes written
 
 ### Gauge Metrics
-- `ebs_volume_iops_exceeded_check` - Whether IOPS limit was exceeded (0 or 1)
-- `ebs_volume_throughput_exceeded_check` - Whether throughput limit was exceeded (0 or 1)
 - `ebs_volume_queue_length` - Current volume queue length
-- `ebs_volume_performance_exceeded_iops_percent` - Percentage of time IOPS limit was exceeded in last interval
-- `ebs_volume_performance_exceeded_throughput_percent` - Percentage of time throughput limit was exceeded in last interval
-- `ebs_instance_performance_exceeded_iops_percent` - Percentage of time instance IOPS limit was exceeded
-- `ebs_instance_performance_exceeded_throughput_percent` - Percentage of time instance throughput limit was exceeded
 
 All metrics include labels:
 - `device` - NVMe device name (e.g., "nvme1n1")
 - `volume_id` - EBS volume ID (e.g., "vol-1234567890abcdef0")
 
-## Deployment Options
+## Configuration
 
-This exporter can be deployed in two ways:
-
-1. **Standalone Binary** - Run directly on EC2 instances (see below)
-2. **OpenShift Operator** - Deploy as a DaemonSet in OpenShift clusters (see [OpenShift Deployment](#openshift-deployment))
-
-## Building
-
-For detailed build instructions, environment variables, and advanced build options, see **[BUILD.md](BUILD.md)**.
-
-### Quick Build
+### Environment Variables
 
 ```bash
-# Build collector binary (standalone)
-make build-collector
-# → Produces: bin/ebs-metrics-collector
+# Required
+export QUAY_USER="your-quay-username"
 
-# Build operator binary (Kubernetes)
-make build-operator
-# → Produces: bin/ebs-metrics-collector-operator
-
-# Build both binaries
-make build
-# → Produces: bin/ebs-metrics-collector
-#             bin/ebs-metrics-collector-operator
-
-# Build collector container image
-make docker-build-collector
-# → Produces: ${IMG} (default: quay.io/app-sre/ebs-metrics-exporter:latest)
-
-# Build operator container image
-make docker-build-operator
-# → Produces: ${IMG}-operator
-
-# Build both container images
-make docker-build-all
-# → Produces: ${IMG}
-#             ${IMG}-operator
-
-# Build OLM bundle image
-make bundle-build
-# → Produces: ${BUNDLE_IMG} (default: quay.io/app-sre/ebs-metrics-exporter-bundle:v${OPERATOR_VERSION})
-
-# Build OLM catalog image
-make catalog-build
-# → Produces: ${CATALOG_IMG} (default: quay.io/app-sre/ebs-metrics-exporter-catalog:v${OPERATOR_VERSION})
+# Optional
+export IMG="quay.io/${QUAY_USER}/ebs-metrics-exporter:custom-tag"
+export IMG_PKO="quay.io/${QUAY_USER}/ebs-metrics-exporter-pko:custom-tag"
 ```
 
-## Standalone Deployment
+### DaemonSet Configuration
 
-### Requirements
+Edit `deploy_pko/DaemonSet-ebs-metrics-exporter.yaml.gotmpl`:
 
-- Go 1.22 or later
-- Linux system with NVMe EBS volumes
-- Root/sudo access (required for NVMe IOCTLs)
-- Amazon EC2 instance with EBS volumes
-
-## Usage
-
-```bash
-# Run the exporter (requires root access for IOCTL operations)
-sudo ./ebs-metrics-collector --device /dev/nvme1n1 --port 8090
-```
-
-### Command-line Flags
-
-- `--device` - NVMe device to monitor (required, e.g., `/dev/nvme1n1`)
-- `--port` - Port to listen on (default: `8090`)
-
-### Example
-
-```bash
-# Start the exporter for /dev/nvme1n1 on port 9100
-sudo ./ebs-metrics-collector --device /dev/nvme1n1 --port 9100
-```
-
-The exporter will start an HTTP server with two endpoints:
-- `http://localhost:9100/` - Landing page with basic info
-- `http://localhost:9100/metrics` - Prometheus metrics endpoint
-
-## Prometheus Configuration
-
-Add this job to your `prometheus.yml`:
-
+**Change device path:**
 ```yaml
-scrape_configs:
-  - job_name: 'ebs'
-    static_configs:
-      - targets: ['localhost:9100']
+args:
+- --device=/dev/nvme0n1  # Change this
+- --port=8090
 ```
 
-## OpenShift Deployment
-
-This project supports two deployment architectures:
-
-| Feature | DaemonSet (Direct) | Operator-Based |
-|---------|-------------------|----------------|
-| **Complexity** | Simple | Moderate |
-| **Components** | DaemonSet only | Operator + DaemonSet |
-| **Metrics Scope** | Per-node | Per-node + Cluster-wide |
-| **Use Case** | Quick deployment, simple monitoring | Advanced monitoring, lifecycle management |
-| **Recommended For** | Most deployments | Large clusters, centralized monitoring |
-
-### Deployment Option 1: DaemonSet (Direct)
-
-**Recommended for most users** - Simple, direct deployment of collector pods.
-
-This deploys the collector as a DaemonSet that runs on every node with EBS volumes.
-
-#### Prerequisites
-
-- **OpenShift cluster** (4.x or later)
-- **oc CLI** installed and logged in with cluster-admin privileges
-- **Container registry** access (e.g., Quay.io)
-- **Go 1.22+** (for building from source)
-- **Docker or Podman** for container builds
-
-#### 1. Build Container Images
-
-For detailed build instructions, see **[BUILD.md](BUILD.md)**.
-
-```bash
-# Quick build
-export IMG=quay.io/your-org/ebs-metrics-exporter:latest
-make docker-build
-make docker-push
-```
-
-#### 2. Update Image Reference
-
-```bash
-# Update the DaemonSet to use your image
-sed -i "s|REPLACE_IMAGE|${IMG}|g" deploy/30_ebs-metrics-exporter_openshift-sre-ebs-metrics.DaemonSet.yaml
-```
-
-#### 3. Deploy to OpenShift
-
-```bash
-# Deploy all resources (ServiceAccount, SCC, DaemonSet, Service, ServiceMonitor)
-make deploy
-
-# Or manually:
-oc apply -f deploy/
-```
-
-#### 4. Verify Deployment
-
-```bash
-# Check DaemonSet status
-oc get daemonset -n openshift-sre-ebs-metrics ebs-metrics-exporter
-
-# Check running pods
-oc get pods -n openshift-sre-ebs-metrics -l app.kubernetes.io/component=ebs-metrics-exporter
-
-# View logs
-oc logs -n openshift-sre-ebs-metrics -l app.kubernetes.io/component=ebs-metrics-exporter --tail=50
-
-# Test metrics endpoint
-POD=$(oc get pods -n openshift-sre-ebs-metrics -l app.kubernetes.io/component=ebs-metrics-exporter -o jsonpath='{.items[0].metadata.name}')
-oc exec -n openshift-sre-ebs-metrics $POD -- curl -s localhost:8090/metrics | grep ^ebs_
-```
-
-### Deployment Option 2: Operator-Based
-
-The operator-based deployment provides a Kubernetes operator that manages the DaemonSet lifecycle and exposes aggregated cluster-wide metrics.
-
-**Deployment Methods:**
-- **Manual Deployment**: Deploy operator directly using YAML manifests (see below)
-- **OLM (Operator Lifecycle Manager)**: Deploy via OperatorHub for automated lifecycle management (see **[OLM.md](OLM.md)**)
-
-#### Architecture
-
-```
-┌─────────────────────────────────────────┐
-│         OpenShift Cluster                │
-│                                          │
-│  ┌────────────────────────────────────┐ │
-│  │  Operator Deployment               │ │
-│  │  - Manages DaemonSet lifecycle     │ │
-│  │  - Exposes aggregated metrics      │ │
-│  │  - Port 8383                       │ │
-│  └────────────────────────────────────┘ │
-│                                          │
-│  ┌────────────────────────────────────┐ │
-│  │  EBS Collector DaemonSet           │ │
-│  │  - Runs on every node              │ │
-│  │  - Collects NVMe stats             │ │
-│  │  - Port 8090                       │ │
-│  └────────────────────────────────────┘ │
-└─────────────────────────────────────────┘
-```
-
-#### Prerequisites
-
-- Same as DaemonSet deployment
-- Operator image built and pushed to registry
-- Collector (DaemonSet) image built and pushed to registry
-
-#### Installation Steps
-
-**1. Build Images**
-
-```bash
-# Build operator image
-export IMG_OPERATOR=quay.io/your-org/ebs-metrics-collector-operator:latest
-make docker-build-operator
-make docker-push-operator
-
-# Build collector image
-export IMG=quay.io/your-org/ebs-metrics-exporter:latest
-make docker-build-collector
-make docker-push-collector
-```
-
-**2. Create Namespace and RBAC**
-
-```bash
-# Create namespace
-oc create namespace openshift-sre-ebs-metrics
-
-# Label namespace for monitoring
-oc label namespace openshift-sre-ebs-metrics openshift.io/cluster-monitoring=true
-```
-
-**3. Deploy the Operator**
-
-Create operator deployment manifest `operator-deployment.yaml`:
-
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: ebs-metrics-collector-operator
-  namespace: openshift-sre-ebs-metrics
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: ebs-metrics-collector-operator
-  template:
-    metadata:
-      labels:
-        app: ebs-metrics-collector-operator
-    spec:
-      serviceAccountName: ebs-metrics-exporter
-      containers:
-      - name: operator
-        image: quay.io/your-org/ebs-metrics-collector-operator:latest
-        ports:
-        - containerPort: 8383
-          name: metrics
-        - containerPort: 8081
-          name: health
-        resources:
-          requests:
-            cpu: 100m
-            memory: 128Mi
-          limits:
-            cpu: 500m
-            memory: 512Mi
-```
-
-Deploy:
-```bash
-# Deploy ServiceAccount and RBAC
-oc apply -f deploy/10_ebs-metrics-exporter.ServiceAccount.yaml
-oc apply -f deploy/10_prometheus-k8s_openshift-sre-ebs-metrics.Role.yaml
-oc apply -f deploy/20_prometheus-k8s_openshift-sre-ebs-metrics.RoleBinding.yaml
-
-# Deploy operator
-oc apply -f operator-deployment.yaml
-
-# Verify operator is running
-oc get deployment -n openshift-sre-ebs-metrics ebs-metrics-collector-operator
-oc logs -n openshift-sre-ebs-metrics deployment/ebs-metrics-collector-operator
-```
-
-**4. Deploy the Collector DaemonSet**
-
-Update the DaemonSet image and deploy:
-
-```bash
-# Update image reference
-sed -i "s|REPLACE_IMAGE|${IMG}|g" deploy/30_ebs-metrics-exporter_openshift-sre-ebs-metrics.DaemonSet.yaml
-
-# Deploy remaining resources
-oc apply -f deploy/20_ebs-metrics-exporter.SecurityContextConstraints.yaml
-oc apply -f deploy/30_ebs-metrics-exporter_openshift-sre-ebs-metrics.DaemonSet.yaml
-oc apply -f deploy/40_ebs-metrics-exporter_openshift-sre-ebs-metrics.Service.yaml
-oc apply -f deploy/50_ebs-metrics-exporter_openshift-sre-ebs-metrics.ServiceMonitor.yaml
-
-# Verify DaemonSet is running
-oc get daemonset -n openshift-sre-ebs-metrics
-oc get pods -n openshift-sre-ebs-metrics
-```
-
-**5. Verify Deployment**
-
-```bash
-# Check operator metrics (aggregated cluster-wide)
-oc port-forward -n openshift-sre-ebs-metrics deployment/ebs-metrics-collector-operator 8383:8383
-curl http://localhost:8383/metrics
-
-# Check collector pod metrics (per-node)
-POD=$(oc get pods -n openshift-sre-ebs-metrics -l app.kubernetes.io/component=ebs-metrics-exporter -o jsonpath='{.items[0].metadata.name}')
-oc port-forward -n openshift-sre-ebs-metrics $POD 8090:8090
-curl http://localhost:8090/metrics
-```
-
-#### Operator Metrics vs DaemonSet Metrics
-
-**Operator Metrics (Port 8383):**
-- Aggregated cluster-wide EBS metrics
-- Includes `cluster_id` label
-- Single scrape endpoint for entire cluster
-- Recommended for cluster-level monitoring
-
-**DaemonSet Pod Metrics (Port 8090):**
-- Per-node EBS metrics
-- Includes `node`, `device`, `volume_id` labels
-- Multiple endpoints (one per node)
-- Useful for node-level debugging
-
-For detailed operator architecture and development information, see **[README.operator.md](README.operator.md)**.
-
-### Deployment Architecture (DaemonSet)
-
-The OpenShift deployment creates:
-
-- **Namespace**: `openshift-sre-ebs-metrics` with cluster monitoring enabled
-- **ServiceAccount**: `ebs-metrics-exporter` for pod identity
-- **SecurityContextConstraints**: Custom SCC for privileged access to NVMe devices
-- **DaemonSet**: Runs exporter pod on every Linux node
-- **Service**: Headless service for endpoint discovery
-- **ServiceMonitor**: Configures Prometheus to scrape metrics automatically
-- **RBAC**: Role and RoleBinding for Prometheus access
-
-### Configuration
-
-#### Customize NVMe Device
-
-Edit `deploy/30_ebs-metrics-exporter_openshift-sre-ebs-metrics.DaemonSet.yaml`:
-
-```yaml
-env:
-- name: EBS_DEVICE
-  value: "/dev/nvme0n1"  # Change to your device
-```
-
-#### Adjust Resource Limits
-
+**Adjust resources:**
 ```yaml
 resources:
   requests:
@@ -400,80 +349,81 @@ resources:
     memory: 128Mi
 ```
 
-#### Change Scrape Interval
-
-Edit `deploy/50_ebs-metrics-exporter_openshift-sre-ebs-metrics.ServiceMonitor.yaml`:
-
+**Change scrape interval** (ServiceMonitor):
 ```yaml
 endpoints:
 - port: metrics
   interval: 60s  # Default is 30s
 ```
 
-### Accessing Metrics
+## Troubleshooting
 
-#### Via OpenShift Prometheus
+### Build Issues
 
-Metrics are automatically scraped by OpenShift's cluster Prometheus. Access via the OpenShift Console:
+**Q: Build fails with "no such file or directory"**
+```bash
+# Ensure you're in the repo root
+cd ~/sandbox/ebs-metrics-exporter
 
-1. Navigate to **Observe** → **Metrics**
-2. Query examples:
-
-```promql
-# Show all EBS metrics
-{__name__=~"ebs_.*"}
-
-# Volume IOPS exceeded percentage by node
-ebs_volume_performance_exceeded_iops_percent
-
-# Total read operations per volume
-sum(rate(ebs_total_read_ops_total[5m])) by (volume_id)
-
-# Nodes with high queue length
-ebs_volume_queue_length > 100
+# Check dependencies
+go mod tidy
 ```
 
-#### Via Port Forward
-
+**Q: Docker build fails on macOS**
 ```bash
-# Forward metrics port from a pod
-POD=$(oc get pods -n openshift-sre-ebs-metrics -l app.kubernetes.io/component=ebs-metrics-exporter -o jsonpath='{.items[0].metadata.name}')
-oc port-forward -n openshift-sre-ebs-metrics $POD 8090:8090
-
-# Query metrics
-curl http://localhost:8090/metrics
+# Use podman instead
+make podman-build
+make podman-push
 ```
 
-### Troubleshooting
+### Deployment Issues
 
-#### Pods Not Starting
-
+**Q: Pods not starting**
 ```bash
-# Check pod status and events
-oc describe pod -n openshift-sre-ebs-metrics -l app.kubernetes.io/component=ebs-metrics-exporter
+# Check pod status
+oc describe pod -n openshift-sre-ebs-metrics -l app.kubernetes.io/name=ebs-metrics-exporter
+
+# Check events
+oc get events -n openshift-sre-ebs-metrics --sort-by='.lastTimestamp'
 
 # Verify SCC assignment
-oc get pod -n openshift-sre-ebs-metrics -o yaml | grep -A5 scc
-
-# Check SCC permissions
-oc adm policy who-can use scc ebs-metrics-exporter
+oc get pod -n openshift-sre-ebs-metrics -o yaml | grep 'openshift.io/scc'
 ```
 
-#### No Metrics Appearing
-
+**Q: ImagePullBackOff errors**
 ```bash
-# Check device access
+# Make sure image is public or you have ImagePullSecrets
+# Check image exists
+podman pull quay.io/${QUAY_USER}/ebs-metrics-exporter:test
+
+# Make repository public in Quay.io:
+# quay.io → Repository Settings → Make Public
+```
+
+**Q: No metrics appearing**
+```bash
+# Check device path
 oc exec -n openshift-sre-ebs-metrics $POD -- ls -la /dev/nvme*
 
-# View detailed logs
-oc logs -n openshift-sre-ebs-metrics $POD -f
+# Check container logs
+oc logs -n openshift-sre-ebs-metrics $POD
 
-# Test IOCTL access manually
-oc exec -n openshift-sre-ebs-metrics $POD -- /ebs-metrics-collector --device /dev/nvme1n1
+# Test metrics endpoint
+oc exec -n openshift-sre-ebs-metrics $POD -- curl localhost:8090/metrics
 ```
 
-#### Prometheus Not Scraping
+**Q: Permission denied errors**
+```bash
+# Verify SCC grants SYS_ADMIN capability
+oc get scc ebs-metrics-exporter -o yaml | grep -A5 allowedCapabilities
 
+# Check pod security context
+oc get pod $POD -n openshift-sre-ebs-metrics -o json | jq '.spec.containers[0].securityContext'
+```
+
+### Prometheus Issues
+
+**Q: Prometheus not scraping**
 ```bash
 # Verify ServiceMonitor exists
 oc get servicemonitor -n openshift-sre-ebs-metrics
@@ -484,55 +434,107 @@ oc get endpoints -n openshift-sre-ebs-metrics ebs-metrics-exporter
 # Verify Prometheus RBAC
 oc get rolebinding -n openshift-sre-ebs-metrics prometheus-k8s
 
-# Check ServiceMonitor configuration
-oc get servicemonitor ebs-metrics-exporter -n openshift-sre-ebs-metrics -o yaml
+# Check Prometheus targets in UI
+# OpenShift Console → Observe → Targets
+# Look for: openshift-sre-ebs-metrics/ebs-metrics-exporter
 ```
 
-### Uninstall
+## Project Structure
 
-```bash
-# Remove all resources
-make undeploy
-
-# Or manually:
-oc delete -f deploy/
+```
+ebs-metrics-exporter/
+├── main.go                          # Exporter entry point (~150 LOC)
+├── config/
+│   └── config.go                    # Constants (name, namespace)
+├── pkg/
+│   ├── collector/
+│   │   └── collector.go             # Prometheus collector
+│   └── nvme/
+│       └── nvme.go                  # NVMe IOCTL logic
+├── deploy_pko/                      # PKO deployment manifests
+│   ├── manifest.yaml                # PKO package definition
+│   ├── Namespace-*.yaml
+│   ├── ServiceAccount-*.yaml
+│   ├── SecurityContextConstraints-*.yaml
+│   ├── Role-*.yaml
+│   ├── RoleBinding-*.yaml
+│   ├── DaemonSet-*.yaml.gotmpl      # Templated DaemonSet
+│   ├── Service-*.yaml
+│   └── ServiceMonitor-*.yaml
+├── deploy/                          # Legacy YAML manifests
+├── build/
+│   └── Dockerfile.pko               # PKO package Dockerfile
+├── .tekton/                         # Konflux CI/CD pipelines
+├── Dockerfile                       # Application Dockerfile
+├── Makefile                         # Build and deployment targets
+└── README.md                        # This file
 ```
 
-### Additional Documentation
+## Production Deployment
 
-- **[BUILD.md](BUILD.md)** - Detailed build instructions, multi-arch builds, FIPS mode
-- **[OLM.md](OLM.md)** - OLM (Operator Lifecycle Manager) deployment guide
-- **[README.operator.md](README.operator.md)** - Operator architecture and development
-- **[QUICKSTART.md](QUICKSTART.md)** - Quick deployment guide with step-by-step instructions
-- **[DEPLOYMENT_SUMMARY.md](DEPLOYMENT_SUMMARY.md)** - Comprehensive deployment architecture reference
-- **[BOILERPLATE.md](BOILERPLATE.md)** - OpenShift boilerplate system documentation
+For production deployment via app-interface, see:
+- [PKO_BUILD_GUIDE.md](PKO_BUILD_GUIDE.md) - Konflux CI/CD integration
+- [REFACTORING_SUMMARY.md](REFACTORING_SUMMARY.md) - Architecture decisions
 
-### Build Configuration
-
-For detailed information about:
-- Available Makefile targets
-- Environment variables
-- Build customization options
-- Multi-architecture builds
-- FIPS mode configuration
-
-See **[BUILD.md](BUILD.md)**.
+Production images are built automatically by Konflux and managed via app-interface GitOps.
 
 ## Architecture
 
-The exporter follows the Prometheus instrumentation best practices:
+### Why DaemonSet-Only?
 
-1. **Collector Pattern**: Implements `prometheus.Collector` interface
-2. **On-Demand Collection**: Stats are queried when `/metrics` is scraped
-3. **Thread-Safe**: Uses mutex for concurrent scrape safety
-4. **Efficient**: Minimal overhead between scrapes
+This project uses a simplified architecture compared to traditional operators:
+
+**Before** (Operator Pattern):
+- Operator Deployment (1 pod) + DaemonSet (N pods)
+- ~800 LOC
+- Centralized metrics aggregation
+
+**Now** (DaemonSet-Only):
+- DaemonSet only (N pods)
+- ~150 LOC
+- Prometheus handles aggregation
+
+**Benefits:**
+- 83% less code
+- Simpler to understand and maintain
+- Standard node-exporter pattern
+- Optimized for PKO deployment
+
+For detailed rationale, see [REFACTORING_SUMMARY.md](REFACTORING_SUMMARY.md).
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Test locally using the development workflow above
+5. Run tests: `make test`
+6. Run linter: `make go-check`
+7. Format code: `make fmt`
+8. Commit with descriptive message
+9. Push and create a pull request
 
 ## License
 
-Licensed under the MIT License. See LICENSE file for details.
+Licensed under the Apache License 2.0. See LICENSE file for details.
 
 ## References
 
-- [Prometheus Go Client](https://github.com/prometheus/client_golang)
-- [Instrumenting HTTP Server Tutorial](https://prometheus.io/docs/tutorials/instrumenting_http_server_in_go/)
-- [AWS EBS Volume Metrics](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ebs-cloudwatch-metrics.html)
+- **JIRA**: [SREP-2082](https://redhat.atlassian.net/browse/SREP-2082)
+- **AWS EBS Stats**: https://docs.aws.amazon.com/ebs/latest/userguide/nvme-detailed-performance-stats.html
+- **Prometheus Go Client**: https://github.com/prometheus/client_golang
+- **Package Operator**: https://package-operator.run/
+- **OpenShift Boilerplate**: https://github.com/openshift/boilerplate
+
+## Help
+
+```bash
+# Show all make targets
+make help
+
+# Get help with oc commands
+oc --help
+
+# View cluster resources
+oc get all -n openshift-sre-ebs-metrics
+```
