@@ -38,215 +38,357 @@ A lightweight Prometheus exporter for Amazon EBS (Elastic Block Store) performan
 
 ---
 
-## Quick Start (Development Workflow)
+## Quick Start (Local Development)
+
+This project follows the **OpenShift Boilerplate PKO pattern**. All builds use boilerplate-provided targets that mimic production CI/CD pipelines.
 
 ### Prerequisites
 
-- Go 1.22+
-- Docker or Podman
+- Go 1.23+ (for local builds)
+- Podman or Docker
 - OpenShift CLI (`oc`) with cluster access
-- Quay.io account
+- Quay.io account (for pushing images)
+- `IMAGE_REPOSITORY` environment variable set
 
 ### 1. Set Your Image Repository
 
 ```bash
-# Set your personal Quay.io repository
-export QUAY_USER="your-quay-username"
-export IMG="quay.io/${QUAY_USER}/ebs-metrics-exporter:test"
-export IMG_PKO="quay.io/${QUAY_USER}/ebs-metrics-exporter-pko:test"
+# Set your personal Quay.io username (used by all boilerplate targets)
+export IMAGE_REPOSITORY=your-quay-username
 
-# Or set in your shell profile (~/.bashrc, ~/.zshrc)
-echo "export QUAY_USER=your-quay-username" >> ~/.zshrc
+# Recommended: Add to your shell profile
+echo 'export IMAGE_REPOSITORY=your-quay-username' >> ~/.zshrc
+source ~/.zshrc
 ```
 
-### 2. Build and Push Images
+**What this controls:**
+- Application image: `quay.io/${IMAGE_REPOSITORY}/ebs-metrics-exporter:latest`
+- PKO package image: `quay.io/${IMAGE_REPOSITORY}/ebs-metrics-exporter-pko:latest`
+
+### 2. Local CI - Build and Test (No Cluster Required)
 
 ```bash
-# Build both images (application + PKO package)
-make dev-build
-
-# Push to your Quay.io repository
-make dev-push
-
-# Or do both in one command
-make dev-build-push
+# Build both images and run all tests (mimics Konflux CI)
+make local-ci ALLOW_DIRTY_CHECKOUT=true
 ```
 
 <details>
-<summary>What this does</summary>
+<summary>What this does (mimics production CI)</summary>
 
-- Builds application image from `Dockerfile` → `quay.io/${QUAY_USER}/ebs-metrics-exporter:test`
-- Builds PKO package image from `build/Dockerfile.pko` → `quay.io/${QUAY_USER}/ebs-metrics-exporter-pko:test`
-- Pushes both to your Quay.io repository
+1. **Build application image** (boilerplate `docker-build`):
+   - Uses `build/Dockerfile` with FIPS/BoringCrypto
+   - Multi-stage build with Go 1.23+
+   - Output: `quay.io/${IMAGE_REPOSITORY}/ebs-metrics-exporter:latest`
+
+2. **Build PKO package image**:
+   - Uses `build/Dockerfile.pko` (scratch + YAML manifests)
+   - Context: `deploy_pko/` directory
+   - Output: `quay.io/${IMAGE_REPOSITORY}/ebs-metrics-exporter-pko:latest`
+
+3. **Run tests**:
+   - `go-test` - Unit tests
+   - `validate-pko-fixtures` - PKO template validation
+
+**No cluster access or image push required** - perfect for pre-commit validation.
 </details>
 
-### 3. Deploy to Test Cluster
+### 3. Full Workflow - Build, Test, Push, Deploy
 
 ```bash
 # Login to your OpenShift cluster
 oc login https://api.your-cluster.com
 
-# Deploy using PKO
-make dev-deploy
+# Ensure you're logged into Quay.io
+podman login quay.io
 
-# Or deploy using legacy YAML (non-PKO)
-make deploy-legacy IMG=${IMG}
+# Full workflow: build → test → push → deploy
+make local ALLOW_DIRTY_CHECKOUT=true
 ```
 
 <details>
-<summary>What this does</summary>
+<summary>What this does (complete local pipeline)</summary>
 
-**PKO Deployment** (`make dev-deploy`):
-- Creates temporary rendered manifests in `_output/pko/`
-- Replaces `{{ .config.image }}` with your `${IMG}`
-- Applies all manifests to cluster
-- Creates namespace, RBAC, DaemonSet, ServiceMonitor
+**Step 1: Build and Test** (via `local-ci`):
+- Build both images
+- Run all tests
 
-**Legacy Deployment** (`make deploy-legacy`):
-- Uses static YAML from `deploy/` directory
-- Replaces `REPLACE_IMAGE` placeholder with your image
-- Useful for quick testing without PKO
+**Step 2: Push Images** (via `local-push-all`):
+- Push application image: `quay.io/${IMAGE_REPOSITORY}/ebs-metrics-exporter:latest`
+- Push PKO package: `quay.io/${IMAGE_REPOSITORY}/ebs-metrics-exporter-pko:latest`
+
+**Step 3: Deploy via PKO Operator** (via `local-deploy`):
+- Process `hack/pko/clusterpackage-direct.yaml` template
+- Create `ClusterPackage` resource
+- PKO operator deploys in phases: namespace → rbac → deploy
+
+**Step 4: Show Status**:
+- Display ClusterPackage, Namespace, DaemonSet, Pods
 </details>
 
 ### 4. Verify Deployment
 
 ```bash
-# Check DaemonSet status
-make dev-status
+# Check deployment status
+make local-status
 
 # View logs from all pods
-make dev-logs
-
-# Test metrics endpoint
-make dev-metrics
+make local-logs
 ```
 
-### 5. Make Changes and Iterate
+<details>
+<summary>Expected output</summary>
 
-```bash
-# Edit code
-vim main.go
-
-# Rebuild, push, and redeploy
-make dev-rebuild
-
-# Or do it step by step
-make dev-build
-make dev-push
-make dev-restart  # Restarts DaemonSet to pull new image
 ```
+=== ClusterPackage ===
+NAME                   PHASE       STATUS
+ebs-metrics-exporter   Available   True
 
-### 6. Clean Up
+=== Namespace ===
+NAME                        STATUS   AGE
+openshift-sre-ebs-metrics   Active   2m
+
+=== DaemonSet ===
+NAME                   DESIRED   CURRENT   READY   UP-TO-DATE   AVAILABLE
+ebs-metrics-exporter   3         3         3       3            3
+
+=== Pods ===
+NAME                         READY   STATUS    RESTARTS   AGE
+ebs-metrics-exporter-abc123  1/1     Running   0          2m
+ebs-metrics-exporter-def456  1/1     Running   0          2m
+ebs-metrics-exporter-ghi789  1/1     Running   0          2m
+```
+</details>
+
+### 5. Clean Up
 
 ```bash
-# Remove from cluster
-make dev-undeploy
+# Remove ClusterPackage (PKO operator cleans up everything)
+make local-undeploy
 
 # Remove local build artifacts
 make clean
 ```
 
-## Development Workflow Details
+---
 
-### Building Locally
+## Advanced: Step-by-Step Workflow
+
+For more control, you can run individual steps:
+
+### Build Only
 
 ```bash
-# Build Go binary (local architecture)
-make build
+# Build application image only
+make docker-build ALLOW_DIRTY_CHECKOUT=true
 
-# Build Go binary for Linux/amd64 (OpenShift target)
-make build-linux
+# Build PKO package image only
+make local-build-pko ALLOW_DIRTY_CHECKOUT=true
 
-# Run locally (requires sudo for NVMe device access)
-sudo ./bin/ebs-metrics-exporter --device /dev/nvme1n1 --port 8090
+# Build both
+make local-build-all ALLOW_DIRTY_CHECKOUT=true
 ```
+
+### Test Only
+
+```bash
+# Run Go tests
+make go-test
+
+# Validate PKO templates
+make validate-pko-fixtures
+
+# Run all tests
+make local-test-all
+```
+
+### Push Only
+
+```bash
+# Push application image
+make docker-push
+
+# Push PKO package image
+make local-push-pko
+
+# Push both
+make local-push-all
+```
+
+### Deploy Only
+
+```bash
+# Deploy to cluster (images must exist in registry)
+make local-deploy
+
+# Check status
+make local-status
+
+# View logs
+make local-logs
+
+# Remove deployment
+make local-undeploy
+```
+
+---
+
+## Deploying with Custom Images
+
+You can deploy images from **any location** (not just your personal Quay.io repo):
+
+### Method 1: Using Environment Variables
+
+```bash
+# Set custom image locations
+export IMAGE_REGISTRY=quay.io
+export IMAGE_REPOSITORY=team-name  # or app-sre, or any repo
+export OPERATOR_IMAGE_TAG=v1.2.3    # or latest, or custom tag
+
+# Deploy using those images
+make local-deploy
+```
+
+**Example - Deploy from app-sre production**:
+```bash
+export IMAGE_REPOSITORY=app-sre
+export OPERATOR_IMAGE_TAG=v1.0.0
+make local-deploy
+```
+
+### Method 2: Manually Process Template
+
+For complete control over image sources:
+
+```bash
+# Process template with custom parameters
+oc process -f hack/pko/clusterpackage-direct.yaml \
+  -p OPERATOR_IMAGE=quay.io/custom-org/ebs-metrics-exporter \
+  -p PKO_IMAGE=quay.io/custom-org/ebs-metrics-exporter-pko \
+  -p IMAGE_TAG=custom-tag \
+  -p DEVICE=/dev/nvme2n1 \
+  | oc apply -f -
+```
+
+### Method 3: Edit ClusterPackage Directly
+
+```bash
+# Create and edit ClusterPackage resource
+cat <<EOF | oc apply -f -
+apiVersion: package-operator.run/v1alpha1
+kind: ClusterPackage
+metadata:
+  name: ebs-metrics-exporter
+spec:
+  image: quay.io/any-registry/ebs-metrics-exporter-pko:any-tag
+  config:
+    image: quay.io/any-registry/ebs-metrics-exporter:any-tag
+    device: /dev/nvme1n1
+EOF
+```
+
+**Use cases**:
+- Testing pre-release versions
+- Using images from CI builds
+- Testing with different NVMe device paths
+- Deploying production images to test cluster
+
+## Development Workflow Details
 
 ### Container Images
 
-Two images are built:
+Two images are built (mimics Konflux CI/CD):
 
-**1. Application Image** (`ebs-metrics-exporter:test`)
-- Contains the Go binary
-- Built from `Dockerfile`
-- Runs on cluster nodes as DaemonSet pods
+**1. Application Image** - Go binary with FIPS crypto
+- **Built from**: `build/Dockerfile`
+- **Builder**: `quay.io/redhat-services-prod/openshift/boilerplate:image-v8.3.4`
+- **Features**: Go 1.23+, FIPS/BoringCrypto enabled
+- **Size**: ~120 MB (UBI9 minimal + binary)
+- **Make target**: `docker-build` (boilerplate)
+- **Tekton pipeline**: `.tekton/ebs-metrics-exporter-push.yaml`
 
-**2. PKO Package Image** (`ebs-metrics-exporter-pko:test`)
-- Contains deployment manifests
-- Built from `build/Dockerfile.pko`
-- Used by Package Operator to deploy the application
+**2. PKO Package Image** - YAML manifests wrapper
+- **Built from**: `build/Dockerfile.pko`
+- **Context**: `deploy_pko/` directory
+- **Size**: ~21 KB (scratch + YAML files)
+- **Make target**: `local-build-pko` (custom)
+- **Tekton pipeline**: `.tekton/ebs-metrics-exporter-pko-push.yaml`
 
-### Image Repositories
+### Image Naming
 
-**Development** (your personal repo):
+Images use boilerplate variables:
+
+**Development** (your personal Quay.io repo):
 ```bash
-quay.io/${QUAY_USER}/ebs-metrics-exporter:test
-quay.io/${QUAY_USER}/ebs-metrics-exporter-pko:test
+# Set IMAGE_REPOSITORY to your username
+export IMAGE_REPOSITORY=your-quay-username
+
+# Images will be:
+quay.io/${IMAGE_REPOSITORY}/ebs-metrics-exporter:latest
+quay.io/${IMAGE_REPOSITORY}/ebs-metrics-exporter-pko:latest
 ```
 
-**Production** (app-sre managed):
+**Production** (app-sre managed via Konflux):
 ```bash
 quay.io/app-sre/ebs-metrics-exporter:v1.0.0
 quay.io/app-sre/ebs-metrics-exporter-pko:v1.0.0
 ```
 
-### Deployment Methods
+### Boilerplate Variables
 
-#### Option 1: PKO Deployment (Recommended)
+These variables are provided by boilerplate and control image names:
 
-Uses Package Operator to deploy from `deploy_pko/` manifests.
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `IMAGE_REGISTRY` | `quay.io` | Container registry |
+| `IMAGE_REPOSITORY` | *(required)* | Your Quay username/org |
+| `OPERATOR_NAME` | `ebs-metrics-exporter` | From config/config.go |
+| `OPERATOR_NAMESPACE` | `openshift-sre-ebs-metrics` | From config/config.go |
+| `OPERATOR_IMAGE_TAG` | `latest` | Image tag |
+| `OPERATOR_IMAGE` | `$(IMAGE_REGISTRY)/$(IMAGE_REPOSITORY)/$(OPERATOR_NAME):$(OPERATOR_IMAGE_TAG)` | Full image URI |
+| `OPERATOR_IMAGE_URI_LATEST` | Same as above with `:latest` | Latest image URI |
 
+**Example**:
 ```bash
-# Deploy
-make dev-deploy
-
-# Check deployment
-oc get packagedeployment -A  # If using PKO operator
-oc get daemonset -n openshift-sre-ebs-metrics
-
-# Undeploy
-make dev-undeploy
-```
-
-#### Option 2: Legacy YAML Deployment
-
-Uses static manifests from `deploy/` directory.
-
-```bash
-# Deploy
-make deploy-legacy IMG=quay.io/${QUAY_USER}/ebs-metrics-exporter:test
-
-# Update image
-oc set image daemonset/ebs-metrics-exporter \
-  ebs-metrics-exporter=quay.io/${QUAY_USER}/ebs-metrics-exporter:test \
-  -n openshift-sre-ebs-metrics
-
-# Undeploy
-make undeploy
+export IMAGE_REPOSITORY=maclark
+# Results in: quay.io/maclark/ebs-metrics-exporter:latest
 ```
 
 ## Testing
 
-### Unit Tests
+### Pre-Commit Testing (No Cluster Required)
 
 ```bash
-# Run all tests
-make test
-
-# Run tests with coverage
-make test-coverage
-
-# View coverage report
-open coverage.html
+# Run all tests locally (mimics CI checks)
+make local-ci ALLOW_DIRTY_CHECKOUT=true
 ```
 
-### Integration Testing
+This runs:
+- `docker-build` - Build with FIPS crypto
+- `local-build-pko` - Build PKO package  
+- `go-test` - Unit tests
+- `validate-pko-fixtures` - Template validation
+
+### Unit Tests Only
+
+```bash
+# Run Go tests
+make go-test
+
+# Run linter
+make go-check
+```
+
+### Integration Testing (Requires Cluster)
 
 ```bash
 # Deploy to cluster
-make dev-deploy
+make local-deploy
 
-# Check pod is running
-oc get pods -n openshift-sre-ebs-metrics
+# Check deployment status
+make local-status
+
+# View logs
+make local-logs
 
 # Get a pod name
 POD=$(oc get pods -n openshift-sre-ebs-metrics -l app.kubernetes.io/name=ebs-metrics-exporter -o jsonpath='{.items[0].metadata.name}')
@@ -256,9 +398,6 @@ oc exec -n openshift-sre-ebs-metrics $POD -- curl -s localhost:8090/metrics | gr
 
 # Check for specific metrics
 oc exec -n openshift-sre-ebs-metrics $POD -- curl -s localhost:8090/metrics | grep ebs_volume_queue_length
-
-# View logs
-oc logs -n openshift-sre-ebs-metrics $POD
 
 # Port-forward for local testing
 oc port-forward -n openshift-sre-ebs-metrics $POD 8090:8090
@@ -278,50 +417,64 @@ oc get servicemonitor -n openshift-sre-ebs-metrics
 
 ## Makefile Targets Reference
 
-### Development Targets
+All targets follow the **OpenShift Boilerplate pattern**. Targets are either:
+- ✅ **Boilerplate targets** - Provided by `boilerplate/openshift/golang-osd-operator/`
+- 🔧 **Local development targets** - Custom targets that call boilerplate (prefixed with `local-`)
 
-| Target | Description |
-|--------|-------------|
-| `make dev-build` | Build both application and PKO package images |
-| `make dev-push` | Push both images to your Quay.io repository |
-| `make dev-build-push` | Build and push both images |
-| `make dev-deploy` | Deploy to cluster using PKO manifests |
-| `make dev-undeploy` | Remove from cluster |
-| `make dev-status` | Show deployment status |
-| `make dev-logs` | View logs from all pods |
-| `make dev-metrics` | Test metrics endpoint from a pod |
-| `make dev-restart` | Restart DaemonSet (pulls latest image) |
-| `make dev-rebuild` | Build, push, and restart (full iteration) |
+### Top-Level Workflows (Recommended)
+
+| Target | Description | Source |
+|--------|-------------|--------|
+| `make local-ci` | Build and test everything (no push/deploy) | 🔧 Custom |
+| `make local` | Full workflow: build → test → push → deploy | 🔧 Custom |
+
+**Use these for most development work**
 
 ### Build Targets
 
-| Target | Description |
-|--------|-------------|
-| `make build` | Build Go binary for local architecture |
-| `make build-linux` | Build Go binary for Linux/amd64 |
-| `make docker-build` | Build application container image |
-| `make docker-push` | Push application image to registry |
-| `make podman-build` | Build using podman (macOS) |
-| `make podman-push` | Push using podman |
+| Target | Description | Source |
+|--------|-------------|--------|
+| `make docker-build` | Build application image (FIPS/BoringCrypto) | ✅ Boilerplate |
+| `make docker-push` | Push application image to registry | ✅ Boilerplate |
+| `make go-build` | Build Go binary to build/_output/bin/ | ✅ Boilerplate |
+| `make local-build-pko` | Build PKO package image | 🔧 Custom |
+| `make local-build-all` | Build both images (docker-build + pko) | 🔧 Custom |
+
+### Push Targets
+
+| Target | Description | Source |
+|--------|-------------|--------|
+| `make docker-push` | Push application image | ✅ Boilerplate |
+| `make local-push-pko` | Push PKO package image | 🔧 Custom |
+| `make local-push-all` | Push both images | 🔧 Custom |
 
 ### Testing Targets
 
-| Target | Description |
-|--------|-------------|
-| `make test` | Run unit tests |
-| `make test-coverage` | Run tests with coverage report |
-| `make fmt` | Format Go code |
-| `make vet` | Run go vet |
-| `make tidy` | Run go mod tidy |
-| `make go-check` | Run linter (golangci-lint) |
+| Target | Description | Source |
+|--------|-------------|--------|
+| `make go-test` | Run unit tests | ✅ Boilerplate |
+| `make go-check` | Run linter (golangci-lint) | ✅ Boilerplate |
+| `make validate-pko-fixtures` | Validate PKO templates | ✅ Boilerplate |
+| `make generate-pko-fixtures` | Regenerate PKO test fixtures | ✅ Boilerplate |
+| `make local-test-all` | Run all tests (go-test + validate-pko) | 🔧 Custom |
 
 ### Deployment Targets
 
-| Target | Description |
-|--------|-------------|
-| `make deploy-legacy` | Deploy using legacy YAML (non-PKO) |
-| `make undeploy` | Remove legacy deployment |
-| `make pko-validate` | Validate PKO manifests |
+| Target | Description | Source |
+|--------|-------------|--------|
+| `make local-deploy` | Deploy via PKO operator | 🔧 Custom |
+| `make local-undeploy` | Remove ClusterPackage | 🔧 Custom |
+| `make local-status` | Show deployment status | 🔧 Custom |
+| `make local-logs` | View pod logs | 🔧 Custom |
+
+### Utility Targets
+
+| Target | Description | Source |
+|--------|-------------|--------|
+| `make clean` | Remove build artifacts | ✅ Boilerplate |
+| `make isclean` | Check if git is clean | ✅ Boilerplate |
+| `make boilerplate-update` | Update boilerplate framework | 🔧 Custom |
+| `make docker-login` | Login to container registry | ✅ Boilerplate |
 
 ### Cleanup Targets
 
@@ -547,6 +700,60 @@ For detailed rationale, see [REFACTORING_SUMMARY.md](REFACTORING_SUMMARY.md).
 7. Format code: `make fmt`
 8. Commit with descriptive message
 9. Push and create a pull request
+
+## Quick Reference
+
+### Common Workflows
+
+**Pre-commit validation** (no cluster):
+```bash
+export IMAGE_REPOSITORY=your-quay-username
+make local-ci ALLOW_DIRTY_CHECKOUT=true
+```
+
+**Full end-to-end test** (with cluster):
+```bash
+export IMAGE_REPOSITORY=your-quay-username
+make local ALLOW_DIRTY_CHECKOUT=true
+```
+
+**Deploy specific image version**:
+```bash
+export IMAGE_REPOSITORY=app-sre
+export OPERATOR_IMAGE_TAG=v1.0.0
+make local-deploy
+```
+
+**Deploy from any registry**:
+```bash
+oc process -f hack/pko/clusterpackage-direct.yaml \
+  -p OPERATOR_IMAGE=quay.io/custom/ebs-metrics-exporter \
+  -p PKO_IMAGE=quay.io/custom/ebs-metrics-exporter-pko \
+  -p IMAGE_TAG=custom-tag \
+  | oc apply -f -
+```
+
+### Essential Commands
+
+```bash
+# Build
+make local-build-all ALLOW_DIRTY_CHECKOUT=true
+
+# Test
+make local-test-all
+
+# Deploy
+make local-deploy
+
+# Check status
+make local-status
+
+# View logs
+make local-logs
+
+# Clean up
+make local-undeploy
+```
 
 ## License
 

@@ -1,0 +1,23 @@
+FROM quay.io/redhat-services-prod/openshift/boilerplate:image-v8.3.4 AS builder
+
+RUN mkdir -p /workdir
+WORKDIR /workdir
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN make go-build
+
+####
+FROM registry.access.redhat.com/ubi9/ubi-minimal:9.7-1773939694
+
+ENV USER_UID=1001 \
+    USER_NAME=ebs-metrics-exporter
+
+COPY --from=builder /workdir/build/_output/bin/* /usr/local/bin/
+
+COPY build/bin /usr/local/bin
+RUN  /usr/local/bin/user_setup
+
+ENTRYPOINT ["/usr/local/bin/entrypoint"]
+
+USER ${USER_UID}
