@@ -4,6 +4,40 @@ A lightweight Prometheus exporter for Amazon EBS (Elastic Block Store) performan
 
 **Architecture**: Single Go binary deployed as DaemonSet via Package Operator (PKO).
 
+## 📚 Documentation
+
+### Getting Started
+- **[Quick Start Guide](QUICKSTART_DEV.md)** - Get up and running in 5 minutes
+- **[Development Setup Script](scripts/dev-setup.sh)** - Interactive environment setup
+
+### Development
+- **[Development Workflow](#quick-start-development-workflow)** - Build, deploy, test, iterate (this document)
+- **[Build Guide](BUILD.md)** - Detailed build instructions and options
+- **[Testing Guide](#testing)** - Unit and integration testing
+
+### Deployment
+- **[PKO Build Guide](PKO_BUILD_GUIDE.md)** - Production CI/CD with Konflux and Package Operator
+- **[OLM Deployment](OLM.md)** - Legacy OLM deployment (archived)
+- **[Deployment Summary](DEPLOYMENT_SUMMARY.md)** - Comprehensive deployment architecture
+
+### Architecture & Design
+- **[Refactoring Summary](REFACTORING_SUMMARY.md)** - Architecture decisions and rationale
+- **[Architecture Update](ARCHITECTURE_UPDATE.md)** - Technical architecture details
+- **[Cost Analysis Plan](COST_ANALYSIS_TODO.md)** - Future cost comparison vs CloudWatch
+
+### Legacy Documentation
+- **[README (Refactored)](README.refactored.md)** - Previous iteration documentation
+- **[README (Operator)](README.operator.md)** - Operator pattern documentation (archived)
+- **[Boilerplate Integration](BOILERPLATE_INTEGRATION_SUMMARY.md)** - Boilerplate framework details
+- **[Boilerplate Guide](BOILERPLATE.md)** - Boilerplate system documentation
+- **[Legacy Quick Start](QUICKSTART.md)** - Original quick start guide
+
+### Branch History
+- **`main`** - Current simplified DaemonSet-only architecture (PKO deployment)
+- **`archive/olm-operator-approach`** - Original Operator + DaemonSet pattern (OLM deployment)
+
+---
+
 ## Quick Start (Development Workflow)
 
 ### Prerequisites
