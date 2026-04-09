@@ -1,0 +1,15 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ebs-metrics-exporter
+  annotations:
+    package-operator.run/phase: rbac
+    package-operator.run/collision-protection: IfNoController
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: ebs-metrics-exporter
+subjects:
+- kind: ServiceAccount
+  name: ebs-metrics-exporter
+  namespace: openshift-sre-ebs-metrics

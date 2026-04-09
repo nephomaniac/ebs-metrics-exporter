@@ -349,8 +349,8 @@ These variables are provided by boilerplate and control image names:
 
 **Example**:
 ```bash
-export IMAGE_REPOSITORY=maclark
-# Results in: quay.io/maclark/ebs-metrics-exporter:latest
+export IMAGE_REPOSITORY=your-quay-username
+# Results in: quay.io/your-quay-username/ebs-metrics-exporter:latest
 ```
 
 ## Testing

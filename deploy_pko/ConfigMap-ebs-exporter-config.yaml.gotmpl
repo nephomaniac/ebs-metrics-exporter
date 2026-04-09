@@ -1,0 +1,96 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ebs-metrics-exporter-config
+  namespace: openshift-sre-ebs-metrics
+  annotations:
+    package-operator.run/phase: deploy
+    package-operator.run/collision-protection: IfNoController
+data:
+  config.yaml: |
+    # EBS Metrics Exporter Configuration
+    # This ConfigMap controls device discovery, filtering, and metric collection behavior.
+    # All fields are optional - defaults provide sensible auto-discovery behavior.
+
+    # Device Discovery Configuration
+    deviceDiscovery:
+      # Discovery mode: "auto", "explicit", or "disabled"
+      # - auto: Automatically discover EBS volumes via NVMe vendor ID (default)
+      # - explicit: Only monitor devices listed in explicitDevices
+      # - disabled: Do not monitor any devices (for testing/troubleshooting)
+      mode: auto
+
+      # Skip PVC mapping via Kubernetes API (default: false)
+      # When true:
+      #   - All volumes labeled as volume_type="root" (no distinction between root/PVC)
+      #   - No Kubernetes API queries (lower overhead)
+      #   - ClusterRole permissions NOT required
+      # When false:
+      #   - Queries k8s API to map volume_id to PVC namespace/name
+      #   - Metrics include pvc_namespace and pvc_name labels for PVC-backed volumes
+      #   - Requires ClusterRole to list PersistentVolumes
+      skipPVCMapping: false
+
+      # Auto-discovery filtering (only applies when mode: auto)
+      autoFilter:
+        # Include only these volume IDs (empty = all volumes)
+        # Example: ["vol-abc123", "vol-def456"]
+        includeVolumeIDs: []
+
+        # Exclude these volume IDs from monitoring
+        # Example: ["vol-rootvolume"]
+        excludeVolumeIDs: []
+
+        # Include only these device paths (empty = all discovered devices)
+        # Example: ["/dev/nvme0n1", "/dev/nvme1n1"]
+        includeDevices: []
+
+        # Exclude these device paths from monitoring
+        # Example: ["/dev/nvme0n1"]  # Exclude root volume
+        excludeDevices: []
+
+      # Explicit device list (only used when mode: explicit)
+      # Bypasses auto-discovery and monitors only these devices
+      # Example:
+      # explicitDevices:
+      #   - devicePath: /dev/nvme1n1
+      #     volumeID: vol-abc123  # Optional: if known
+      explicitDevices: []
+
+    # Metric Collection Configuration
+    metrics:
+      # Metric filtering - include OR exclude (not both)
+      # Include list acts as whitelist (only export these metrics)
+      # Exclude list acts as blacklist (export all except these)
+      # Both empty = export all metrics (default)
+
+      # Include only these metrics (glob patterns supported)
+      # Example: ["ebs_volume_*", "ebs_total_*"]
+      include: []
+
+      # Exclude these metrics from export (glob patterns supported)
+      # Example: ["ebs_instance_*"]
+      exclude: []
+
+      # Polling interval in seconds (default: 30)
+      # How often to collect EBS performance statistics from each device
+      pollingIntervalSeconds: 30
+
+      # Rediscovery interval in seconds (default: 60)
+      # How often to check for newly attached or detached volumes
+      # Set to 0 to disable (discover only at startup)
+      rediscoveryIntervalSeconds: 60
+
+    # Advanced Configuration (optional)
+    advanced:
+      # Log level: debug, info, warn, error (default: info)
+      logLevel: info
+
+      # Maximum number of devices to monitor (safety limit)
+      # Prevents runaway resource usage if many devices are discovered
+      # Default: 20
+      maxDevices: 20
+
+      # Device open timeout in seconds (default: 5)
+      # How long to wait when opening device files
+      deviceOpenTimeoutSeconds: 5

@@ -6,8 +6,10 @@ OPERATOR_NAME := ebs-metrics-exporter
 OPERATOR_NAMESPACE := openshift-sre-ebs-metrics
 
 # Image configuration
+# For Konflux builds: quay.io/redhat-user-workloads/ebs-metrics-exporter-tenant/openshift
+# For local dev: override IMAGE_REPOSITORY via env (e.g., export IMAGE_REPOSITORY=your-quay-username)
 IMAGE_REGISTRY ?= quay.io
-IMAGE_REPOSITORY ?= app-sre
+IMAGE_REPOSITORY ?= redhat-user-workloads/ebs-metrics-exporter-tenant/openshift
 
 # Container image names
 OPERATOR_IMAGE_URI := $(IMAGE_REGISTRY)/$(IMAGE_REPOSITORY)/$(OPERATOR_NAME)

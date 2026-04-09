@@ -19,3 +19,9 @@ spec:
     interval: 30s
     path: /metrics
     scheme: http
+    metricRelabelings:
+    # Drop pod label - redundant for DaemonSet (1 pod per node)
+    # Reduces cardinality by preventing new time series on pod restarts
+    # Node label provides all necessary location information
+    - action: labeldrop
+      regex: pod

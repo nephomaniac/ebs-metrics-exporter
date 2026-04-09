@@ -12,12 +12,13 @@ import (
 	"time"
 
 	"github.com/nephomaniac/ebs-metrics-exporter/pkg/collector"
+	"github.com/nephomaniac/ebs-metrics-exporter/pkg/config"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 var (
-	devicePath = flag.String("device", "/dev/nvme1n1", "NVMe device path to monitor")
+	configPath = flag.String("config", "/etc/ebs-exporter/config.yaml", "Path to configuration file")
 	port       = flag.Int("port", 8090, "Port to serve metrics on")
 	version    = "dev"
 	commit     = "unknown"
@@ -27,21 +28,46 @@ var (
 func main() {
 	flag.Parse()
 
+	// Print FIPS crypto status (set at build time via boilerplate)
+	fmt.Println("***** Starting with FIPS crypto enabled *****")
+
 	log.Printf("EBS Metrics Exporter starting")
 	log.Printf("Version: %s, Commit: %s, BuildDate: %s", version, commit, buildDate)
-	log.Printf("Monitoring device: %s", *devicePath)
+	log.Printf("Config file: %s", *configPath)
 
-	// Create EBS collector
-	ebsCollector, err := collector.NewEBSCollector(*devicePath)
+	// Load configuration
+	cfg, err := config.Load(*configPath)
 	if err != nil {
-		log.Fatalf("Failed to create EBS collector: %v", err)
+		log.Printf("Warning: Failed to load config: %v", err)
+		log.Printf("Using default configuration")
+		cfg = config.DefaultConfig()
+	} else {
+		log.Printf("Configuration loaded successfully")
+		log.Printf("Discovery mode: %s", cfg.DeviceDiscovery.Mode)
+		log.Printf("Polling interval: %d seconds", cfg.Metrics.PollingIntervalSeconds)
 	}
 
-	log.Printf("Initialized collector for volume: %s", ebsCollector.GetVolumeID())
+	// Create multi-device collector with auto-discovery
+	multiCollector, err := collector.NewMultiDeviceCollector(cfg)
+	if err != nil {
+		log.Fatalf("Failed to create multi-device collector: %v", err)
+	}
+
+	// Log discovered devices
+	devices := multiCollector.GetDevices()
+	if len(devices) == 0 {
+		log.Println("Warning: No devices to monitor")
+	} else {
+		log.Printf("Monitoring %d device(s):", len(devices))
+		collectorInfo := multiCollector.GetCollectorInfo()
+		for devicePath, volumeID := range collectorInfo {
+			log.Printf("  - %s (volume: %s)", devicePath, volumeID)
+		}
+	}
 
 	// Register collector with Prometheus
 	registry := prometheus.NewRegistry()
-	registry.MustRegister(ebsCollector)
+	registry.MustRegister(multiCollector)
 
 	// Create HTTP server
 	mux := http.NewServeMux()
@@ -51,6 +77,12 @@ func main() {
 
 	// Landing page
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		collectorInfo := multiCollector.GetCollectorInfo()
+		devicesHTML := ""
+		for devicePath, volumeID := range collectorInfo {
+			devicesHTML += fmt.Sprintf("<tr><td>%s</td><td>%s</td></tr>\n", devicePath, volumeID)
+		}
+
 		fmt.Fprintf(w, `<html>
 <head><title>EBS Metrics Exporter</title></head>
 <body>
@@ -58,12 +90,17 @@ func main() {
 <p><a href="/metrics">Metrics</a></p>
 <dl>
 <dt>Version</dt><dd>%s</dd>
-<dt>Device</dt><dd>%s</dd>
-<dt>Volume ID</dt><dd>%s</dd>
+<dt>Discovery Mode</dt><dd>%s</dd>
+<dt>Devices Monitored</dt><dd>%d</dd>
 </dl>
+<h2>Monitored Devices</h2>
+<table border="1">
+<tr><th>Device</th><th>Volume ID</th></tr>
+%s
+</table>
 </body>
 </html>
-`, version, ebsCollector.GetDevice(), ebsCollector.GetVolumeID())
+`, version, cfg.DeviceDiscovery.Mode, len(collectorInfo), devicesHTML)
 	})
 
 	// Health check endpoint
@@ -74,8 +111,15 @@ func main() {
 
 	// Readiness check endpoint
 	mux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, "ready")
+		// Consider ready if we have at least one device OR discovery mode is disabled
+		devices := multiCollector.GetDevices()
+		if len(devices) > 0 || cfg.DeviceDiscovery.Mode == "disabled" {
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, "ready")
+		} else {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			fmt.Fprint(w, "no devices available")
+		}
 	})
 
 	addr := fmt.Sprintf(":%d", *port)

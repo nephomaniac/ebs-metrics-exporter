@@ -22,7 +22,7 @@ spec:
   - name: revision
     value: '{{revision}}'
   - name: output-image
-    value: quay.io/redhat-user-workloads/ebs-metrics-exporter-tenant/ebs-metrics-exporter/ebs-metrics-exporter:{{revision}}
+    value: quay.io/redhat-user-workloads/ebs-metrics-exporter-tenant/openshift/ebs-metrics-exporter:{{revision}}
   - name: dockerfile
     value: Dockerfile
   - name: path-context

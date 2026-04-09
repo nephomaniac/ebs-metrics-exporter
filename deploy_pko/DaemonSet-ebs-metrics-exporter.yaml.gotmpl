@@ -32,7 +32,7 @@ spec:
     spec:
       serviceAccountName: ebs-metrics-exporter
       hostNetwork: false
-      hostPID: false
+      hostPID: true
       hostIPC: false
       nodeSelector:
         kubernetes.io/os: linux
@@ -49,12 +49,10 @@ spec:
       containers:
       - name: ebs-metrics-exporter
         image: '{{ .config.image }}'
-        imagePullPolicy: Always
-        command:
-        - /ebs-metrics-exporter
+        imagePullPolicy: IfNotPresent
         args:
-        - --device={{ .config.device }}
         - --port=8090
+        - --config=/etc/ebs-exporter/config.yaml
         ports:
         - name: metrics
           containerPort: 8090
@@ -83,19 +81,22 @@ spec:
             cpu: 100m
             memory: 128Mi
         securityContext:
-          capabilities:
-            add:
-            - SYS_ADMIN
-          allowPrivilegeEscalation: true
+          privileged: true
           readOnlyRootFilesystem: true
-          runAsNonRoot: false
           runAsUser: 0
         volumeMounts:
         - name: dev
-          mountPath: /dev
+          mountPath: /host/dev
+          readOnly: true
+        - name: config
+          mountPath: /etc/ebs-exporter
           readOnly: true
       volumes:
       - name: dev
         hostPath:
           path: /dev
           type: Directory
+      - name: config
+        configMap:
+          name: ebs-metrics-exporter-config
+          optional: true  # Falls back to default config if ConfigMap doesn't exist

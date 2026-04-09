@@ -29,10 +29,6 @@ spec:
       type: object
       properties:
         image:
-          description: EBS metrics exporter image to deploy
+          description: EBS metrics exporter image to deploy (must be immutable tag)
           type: string
           default: ""
-        device:
-          description: NVMe device path to monitor
-          type: string
-          default: "/dev/nvme1n1"
