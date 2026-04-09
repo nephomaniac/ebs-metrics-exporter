@@ -5,7 +5,8 @@ metadata:
   namespace: openshift-sre-ebs-metrics
   annotations:
     package-operator.run/phase: deploy
-    package-operator.run/collision-protection: IfNoController
+    # No collision-protection: PKO manages with controller ownership
+    # This enables drift prevention: manual edits are reverted, deletions are restored
 data:
   config.yaml: |
     # EBS Metrics Exporter Configuration

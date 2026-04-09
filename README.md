@@ -11,6 +11,7 @@ A lightweight Prometheus exporter for Amazon EBS (Elastic Block Store) performan
 - **[Configuration Guide](CONFIG.md)** - Complete configuration reference
 - **[Deployment Guide](DEPLOYMENT.md)** - Production deployment procedures
 - **[Operations Guide](OPERATIONS.md)** - Day-2 operations, config updates, PKO behavior
+- **[Drift Prevention](DRIFT-PREVENTION.md)** - Immutable deployments, GitOps enforcement, rollback procedures
 
 ### Development
 - **[Development Workflow](#quick-start-development-workflow)** - Build, deploy, test, iterate (this document)

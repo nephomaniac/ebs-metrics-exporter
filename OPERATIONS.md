@@ -4,26 +4,34 @@ This document covers operational procedures for managing the EBS Metrics Exporte
 
 ## PKO Package Operator Behavior
 
-The deployment uses Package Operator (PKO) with specific lifecycle management characteristics.
+The deployment uses Package Operator (PKO) with **controller ownership** to enforce immutable, version-controlled deployments.
 
-### Collision Protection
+### Drift Prevention (PKO Controller Ownership)
 
-All resources have this annotation:
+**Application resources** (ConfigMap, DaemonSet, Service, ServiceMonitor) are **managed by PKO**:
+
 ```yaml
-package-operator.run/collision-protection: IfNoController
+# No collision-protection annotation = PKO controller ownership
+# PKO will:
+# - Set ownerReferences pointing to ClusterPackage
+# - Reconcile resources to match package version
+# - Revert manual edits
+# - Restore deleted resources
 ```
 
 **What this means:**
-- PKO creates resources on initial deployment
-- PKO **will NOT overwrite** manual changes if the resource has no controller reference
-- Admin edits to ConfigMaps, DaemonSets, etc. **will persist**
-- PKO will NOT automatically restore deleted resources
+- ❌ Manual edits are **automatically reverted** to package version
+- ✅ Deletions are **automatically restored**
+- ✅ Package version is **source of truth**
+- ✅ Configuration tied to image version
+- ⚠️ **ONLY** update via GitOps (deploy new package version)
 
-**Implications:**
-- ✅ Safe for cluster admins to edit ConfigMaps directly
-- ✅ Changes won't be reverted by PKO reconciliation
-- ⚠️ If you delete a resource, you must recreate the entire ClusterPackage
-- ⚠️ Manual changes will be lost if you delete and recreate the ClusterPackage
+**Infrastructure resources** (Namespace, RBAC, SCC) keep `IfNoController`:
+- May pre-exist or be shared
+- Won't be deleted on package removal
+- Manual edits permitted (for cluster-wide resources)
+
+**See:** [DRIFT-PREVENTION.md](DRIFT-PREVENTION.md) for complete details and test procedures.
 
 ### Updating the ClusterPackage
 
@@ -43,45 +51,56 @@ oc patch clusterpackage ebs-metrics-exporter --type=merge \
 
 ## Configuration Management
 
-### Scenario 1: Admin Edits ConfigMap
+### NEW BEHAVIOR: GitOps-Only Updates
 
-**Method:**
+**⚠️ IMPORTANT:** ConfigMap is now managed by PKO with controller ownership.
+
+**This means:**
+- ❌ Manual `oc edit` changes are **automatically reverted**
+- ❌ ConfigMap deletions are **automatically restored**
+- ✅ **ONLY** way to update: deploy new package version via GitOps
+
+### Production Workflow (ONLY Supported Method)
+
+**To update configuration:**
+
+```bash
+# 1. Update ConfigMap in package source (Git)
+vim deploy_pko/ConfigMap-ebs-exporter-config.yaml.gotmpl
+git commit -m "Update config: exclude root volumes"
+git push
+
+# 2. CI builds new package with new tag
+# quay.io/app-sre/ebs-metrics-exporter-pko:v0.1.25-gabc123
+
+# 3. Deploy new ClusterPackage version
+oc patch clusterpackage ebs-metrics-exporter --type=merge \
+  -p '{"spec":{"image":"quay.io/app-sre/ebs-metrics-exporter-pko:v0.1.25-gabc123"}}'
+
+# 4. PKO performs rolling update
+# - Updates ConfigMap to new version
+# - Restarts pods one at a time
+# - Old pods run until new pods ready
+```
+
+### Scenario 1: Admin Tries to Edit ConfigMap (Will Fail)
+
+**What admin does:**
 ```bash
 oc edit configmap ebs-metrics-exporter-config -n openshift-sre-ebs-metrics
+# Makes changes, saves
 ```
 
-**What happens:**
-1. ✅ ConfigMap is updated with your changes
-2. ❌ Pods do NOT automatically restart
-3. ❌ PKO does NOT revert your changes
-4. ⚠️ Old pods continue running with old config
+**What actually happens:**
+1. ConfigMap updated with manual change
+2. Within ~10 seconds, PKO detects drift
+3. PKO **reverts ConfigMap** to package version
+4. Manual change is **lost**
 
-**To apply changes:**
-```bash
-# Option 1: Delete pods (DaemonSet recreates them)
-oc delete pods -n openshift-sre-ebs-metrics -l app.kubernetes.io/name=ebs-metrics-exporter
-
-# Option 2: Rollout restart (Kubernetes 1.15+)
-oc rollout restart daemonset/ebs-metrics-exporter -n openshift-sre-ebs-metrics
-
-# Option 3: Scale down and up (not recommended for DaemonSet)
-# Don't use this - DaemonSet will recreate pods immediately
-```
-
-**Best practice:**
-```bash
-# 1. Edit ConfigMap
-oc edit configmap ebs-metrics-exporter-config -n openshift-sre-ebs-metrics
-
-# 2. Verify changes
-oc get configmap ebs-metrics-exporter-config -n openshift-sre-ebs-metrics -o yaml
-
-# 3. Restart pods to apply
-oc delete pods -n openshift-sre-ebs-metrics -l app.kubernetes.io/name=ebs-metrics-exporter
-
-# 4. Watch rollout
-oc get pods -n openshift-sre-ebs-metrics -w
-```
+**Correct approach:**
+- Use GitOps workflow (update package source)
+- Deploy new package version
+- See [DRIFT-PREVENTION.md](DRIFT-PREVENTION.md)
 
 ### Scenario 2: Admin Deletes ConfigMap
 

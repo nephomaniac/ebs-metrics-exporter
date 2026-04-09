@@ -5,7 +5,8 @@ metadata:
   namespace: openshift-sre-ebs-metrics
   annotations:
     package-operator.run/phase: deploy
-    package-operator.run/collision-protection: IfNoController
+    # No collision-protection: PKO manages with controller ownership
+    # ServiceMonitor will be restored if deleted or edited
   labels:
     app.kubernetes.io/name: ebs-metrics-exporter
     app.kubernetes.io/component: metrics-exporter

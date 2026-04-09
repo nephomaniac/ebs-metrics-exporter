@@ -36,15 +36,26 @@ func main() {
 	log.Printf("Config file: %s", *configPath)
 
 	// Load configuration
+	// IMPORTANT: Config validation enforces package-as-source-of-truth
+	// Invalid config causes pod to fail startup, preventing rollout of bad config
 	cfg, err := config.Load(*configPath)
 	if err != nil {
-		log.Printf("Warning: Failed to load config: %v", err)
-		log.Printf("Using default configuration")
+		// Check if config file exists but is invalid
+		if _, statErr := os.Stat(*configPath); statErr == nil {
+			// Config file exists but failed validation
+			log.Printf("ERROR: Configuration validation failed: %v", err)
+			log.Printf("Pod will exit to prevent rollout of invalid configuration")
+			log.Printf("Fix the ConfigMap and PKO will reconcile")
+			os.Exit(1) // Exit with error - pod enters CrashLoopBackOff
+		}
+		// Config file doesn't exist - use defaults (ConfigMap optional: true)
+		log.Printf("Config file not found, using defaults: %v", err)
 		cfg = config.DefaultConfig()
 	} else {
-		log.Printf("Configuration loaded successfully")
+		log.Printf("Configuration loaded and validated successfully")
 		log.Printf("Discovery mode: %s", cfg.DeviceDiscovery.Mode)
 		log.Printf("Polling interval: %d seconds", cfg.Metrics.PollingIntervalSeconds)
+		log.Printf("Skip PVC mapping: %t", cfg.DeviceDiscovery.SkipPVCMapping)
 	}
 
 	// Create multi-device collector with auto-discovery
