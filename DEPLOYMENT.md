@@ -138,14 +138,21 @@ oc patch clusterpackage ebs-metrics-exporter --type=merge \
 
 The Makefile includes cluster verification to prevent accidental deployments:
 
-**Expected test cluster:**
-```
-EXPECTED_CLUSTER=maclarkrosa0408
+**Set expected cluster:**
+```bash
+# Export as environment variable (recommended)
+export EXPECTED_CLUSTER=my-test-cluster
+
+# Or set inline for each command
+EXPECTED_CLUSTER=my-test-cluster make local-deploy
 ```
 
-**Override for different cluster:**
+**Extract cluster ID from current cluster:**
 ```bash
-EXPECTED_CLUSTER=production-cluster make local-deploy
+# Get cluster identifier from server URL
+oc whoami --show-server
+# Example output: https://api.my-test-cluster.example.com:6443
+# Use: my-test-cluster
 ```
 
 **Targets with safety checks:**

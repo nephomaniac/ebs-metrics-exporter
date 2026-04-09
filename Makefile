@@ -4,8 +4,9 @@ FIPS_ENABLED=true
 include boilerplate/generated-includes.mk
 
 # Expected test cluster identifier - set via environment variable or modify here
-# Extract from: oc whoami --show-server
-EXPECTED_CLUSTER ?= maclarkrosa0408
+# Extract from: oc whoami --show-server | grep -o '[^.]*\..*\.devshift\.org' | cut -d. -f1
+# Example: export EXPECTED_CLUSTER=my-test-cluster
+EXPECTED_CLUSTER ?=
 
 .PHONY: boilerplate-update
 boilerplate-update:

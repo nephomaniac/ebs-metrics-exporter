@@ -7,8 +7,9 @@ A lightweight Prometheus exporter for Amazon EBS (Elastic Block Store) performan
 ## 📚 Documentation
 
 ### Getting Started
-- **[Quick Start Guide](QUICKSTART_DEV.md)** - Get up and running in 5 minutes
-- **[Development Setup Script](scripts/dev-setup.sh)** - Interactive environment setup
+- **[Quick Start (Local Development)](#quick-start-local-development)** - Get up and running in minutes (see below)
+- **[Configuration Guide](CONFIG.md)** - Complete configuration reference
+- **[Deployment Guide](DEPLOYMENT.md)** - Production deployment procedures
 
 ### Development
 - **[Development Workflow](#quick-start-development-workflow)** - Build, deploy, test, iterate (this document)
@@ -30,7 +31,8 @@ A lightweight Prometheus exporter for Amazon EBS (Elastic Block Store) performan
 - **[README (Operator)](README.operator.md)** - Operator pattern documentation (archived)
 - **[Boilerplate Integration](BOILERPLATE_INTEGRATION_SUMMARY.md)** - Boilerplate framework details
 - **[Boilerplate Guide](BOILERPLATE.md)** - Boilerplate system documentation
-- **[Legacy Quick Start](QUICKSTART.md)** - Original quick start guide
+- **[Legacy Quick Start](QUICKSTART.md)** - Original quick start guide (archived)
+- **[Legacy Dev Quick Start](QUICKSTART_DEV.md)** - Old development workflow (archived)
 
 ### Branch History
 - **`main`** - Current simplified DaemonSet-only architecture (PKO deployment)
@@ -497,35 +499,55 @@ All targets follow the **OpenShift Boilerplate pattern**. Targets are either:
 ### Gauge Metrics
 - `ebs_volume_queue_length` - Current volume queue length
 
-All metrics include labels:
-- `device` - NVMe device name (e.g., "nvme1n1")
+**Metric Labels:**
+
+For root volumes:
 - `volume_id` - EBS volume ID (e.g., "vol-1234567890abcdef0")
+- `volume_type` - Always "root" for root volumes
+
+For PVC-backed volumes:
+- `volume_id` - EBS volume ID
+- `volume_type` - Always "pvc" for PersistentVolumeClaim volumes
+- `pvc_namespace` - Kubernetes namespace of the PVC
+- `pvc_name` - Name of the PersistentVolumeClaim
 
 ## Configuration
 
-### Environment Variables
+The exporter uses **ConfigMap-based configuration** for all runtime settings. See:
+- **[CONFIG.md](CONFIG.md)** - Complete configuration reference
+- **[DEPLOYMENT.md](DEPLOYMENT.md)** - Deployment and update procedures
 
-```bash
-# Required
-export QUAY_USER="your-quay-username"
+### Quick Configuration Examples
 
-# Optional
-export IMG="quay.io/${QUAY_USER}/ebs-metrics-exporter:custom-tag"
-export IMG_PKO="quay.io/${QUAY_USER}/ebs-metrics-exporter-pko:custom-tag"
-```
+**Default behavior** (no ConfigMap required):
+- Auto-discovers all EBS volumes on the node
+- Exports all available metrics
+- Maps PVC-backed volumes to namespace/name labels
 
-### DaemonSet Configuration
-
-Edit `deploy_pko/DaemonSet-ebs-metrics-exporter.yaml.gotmpl`:
-
-**Change device path:**
+**Custom configuration** via ConfigMap:
 ```yaml
-args:
-- --device=/dev/nvme0n1  # Change this
-- --port=8090
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ebs-metrics-exporter-config
+  namespace: openshift-sre-ebs-metrics
+data:
+  config.yaml: |
+    deviceDiscovery:
+      mode: auto
+      skipPVCMapping: false  # Set to true to skip PVC lookups
+      autoFilter:
+        excludeDevices:
+          - /dev/nvme0n1  # Exclude root volume
+    metrics:
+      pollingIntervalSeconds: 30
 ```
 
-**Adjust resources:**
+For all configuration options and examples, see **[CONFIG.md](CONFIG.md)**.
+
+### Resource Limits
+
+Default resource requests/limits (defined in DaemonSet):
 ```yaml
 resources:
   requests:
@@ -536,11 +558,13 @@ resources:
     memory: 128Mi
 ```
 
-**Change scrape interval** (ServiceMonitor):
+### Prometheus Scrape Interval
+
+Default scrape interval is 30 seconds (defined in ServiceMonitor). To change:
 ```yaml
 endpoints:
 - port: metrics
-  interval: 60s  # Default is 30s
+  interval: 60s  # Adjust as needed
 ```
 
 ## Troubleshooting
@@ -581,7 +605,7 @@ oc get pod -n openshift-sre-ebs-metrics -o yaml | grep 'openshift.io/scc'
 ```bash
 # Make sure image is public or you have ImagePullSecrets
 # Check image exists
-podman pull quay.io/${QUAY_USER}/ebs-metrics-exporter:test
+podman pull quay.io/${IMAGE_REPOSITORY}/ebs-metrics-exporter:latest
 
 # Make repository public in Quay.io:
 # quay.io → Repository Settings → Make Public

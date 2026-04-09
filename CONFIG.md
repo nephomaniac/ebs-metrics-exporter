@@ -23,6 +23,7 @@ Controls how EBS volumes are discovered and which devices to monitor.
 ```yaml
 deviceDiscovery:
   mode: auto  # auto | explicit | disabled
+  skipPVCMapping: false  # Set to true to disable PVC lookups
   
   autoFilter:
     includeVolumeIDs: []
@@ -32,6 +33,19 @@ deviceDiscovery:
   
   explicitDevices: []
 ```
+
+**PVC Mapping:**
+
+- **`skipPVCMapping`** (default: `false`): 
+  - When `false`: Exporter queries Kubernetes API to map EBS volumes to PersistentVolumeClaims
+    - Adds `pvc_namespace` and `pvc_name` labels to PVC-backed volumes
+    - Requires RBAC permissions to list PersistentVolumes
+    - Useful for identifying which workload owns each volume
+  - When `true`: Skip PVC mapping for lightweight deployments
+    - Only exports `volume_id` and `volume_type` labels
+    - No Kubernetes API calls made
+    - Reduces memory footprint and API server load
+    - Use this when PVC identification is not needed
 
 **Discovery Modes:**
 
@@ -115,7 +129,23 @@ data:
           - /dev/nvme0n1  # Root volume
 ```
 
-### Example 3: Monitor Only Specific Volume IDs
+### Example 3: Lightweight Mode (Skip PVC Mapping)
+
+Monitor all volumes without Kubernetes API lookups (reduces overhead):
+
+```yaml
+data:
+  config.yaml: |
+    deviceDiscovery:
+      mode: auto
+      skipPVCMapping: true  # Disable PVC lookups
+    # Metrics will only have: volume_id, volume_type
+    # No pvc_namespace or pvc_name labels
+```
+
+**Use case**: Large clusters where PVC identification is not needed, or environments where Kubernetes API access is restricted.
+
+### Example 4: Monitor Only Specific Volume IDs
 
 Only monitor data volumes by volume ID:
 
@@ -130,7 +160,7 @@ data:
           - vol-def987654321  # Data volume 2
 ```
 
-### Example 4: Explicit Device List
+### Example 5: Explicit Device List
 
 Manually specify devices (bypass auto-discovery):
 
@@ -145,7 +175,7 @@ data:
         - devicePath: /dev/nvme2n1
 ```
 
-### Example 5: Export Only Throttling Metrics
+### Example 6: Export Only Throttling Metrics
 
 Only export IOPS and throughput exceeded metrics:
 
@@ -160,7 +190,7 @@ data:
         - ebs_instance_performance_exceeded_*
 ```
 
-### Example 6: Exclude Instance-Level Metrics
+### Example 7: Exclude Instance-Level Metrics
 
 Export all metrics except instance-level throttling:
 
@@ -172,7 +202,7 @@ data:
         - ebs_instance_*
 ```
 
-### Example 7: High-Frequency Polling for Debugging
+### Example 8: High-Frequency Polling for Debugging
 
 Poll every 10 seconds with debug logging:
 
