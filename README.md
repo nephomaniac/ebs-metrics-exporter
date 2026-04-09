@@ -54,11 +54,27 @@ This project follows the **OpenShift Boilerplate PKO pattern**. All builds use b
 
 ### 1. Set Your Image Repository
 
+**Option A: Use local config file (recommended)**
+
+```bash
+# Create .env.local from template
+make init-env
+
+# Edit .env.local and set your Quay.io username
+# IMAGE_REPOSITORY=your-quay-username
+vim .env.local
+
+# Verify settings
+make show-env
+```
+
+**Option B: Export environment variable**
+
 ```bash
 # Set your personal Quay.io username (used by all boilerplate targets)
 export IMAGE_REPOSITORY=your-quay-username
 
-# Recommended: Add to your shell profile
+# Add to your shell profile for persistence
 echo 'export IMAGE_REPOSITORY=your-quay-username' >> ~/.zshrc
 source ~/.zshrc
 ```
@@ -66,6 +82,8 @@ source ~/.zshrc
 **What this controls:**
 - Application image: `quay.io/${IMAGE_REPOSITORY}/ebs-metrics-exporter:latest`
 - PKO package image: `quay.io/${IMAGE_REPOSITORY}/ebs-metrics-exporter-pko:latest`
+
+**Tip:** The `.env.local` file is git-ignored and safe for personal settings. It's automatically loaded by all `make` commands.
 
 ### 2. Local CI - Build and Test (No Cluster Required)
 
@@ -468,6 +486,14 @@ All targets follow the **OpenShift Boilerplate pattern**. Targets are either:
 | `make local-undeploy` | Remove ClusterPackage | 🔧 Custom |
 | `make local-status` | Show deployment status | 🔧 Custom |
 | `make local-logs` | View pod logs | 🔧 Custom |
+
+### Environment Management
+
+| Target | Description | Source |
+|--------|-------------|--------|
+| `make init-env` | Create .env.local from template | 🔧 Custom |
+| `make show-env` | Show current environment configuration | 🔧 Custom |
+| `make check-cluster` | Verify cluster identity (safety check) | 🔧 Custom |
 
 ### Utility Targets
 

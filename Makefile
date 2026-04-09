@@ -3,10 +3,79 @@ FIPS_ENABLED=true
 
 include boilerplate/generated-includes.mk
 
+# Load local environment configuration if it exists
+# Create with: make init-env
+-include .env.local
+
 # Expected test cluster identifier - set via environment variable or modify here
 # Extract from: oc whoami --show-server | grep -o '[^.]*\..*\.devshift\.org' | cut -d. -f1
 # Example: export EXPECTED_CLUSTER=my-test-cluster
 EXPECTED_CLUSTER ?=
+
+##@ Local Environment Setup
+
+.PHONY: init-env
+init-env: ## Create .env.local from template (for local development settings)
+	@if [ -f .env.local ]; then \
+		echo "⚠️  .env.local already exists"; \
+		echo ""; \
+		echo "To recreate:"; \
+		echo "  1. Backup: cp .env.local .env.local.backup"; \
+		echo "  2. Remove: rm .env.local"; \
+		echo "  3. Recreate: make init-env"; \
+		exit 1; \
+	fi
+	@echo "Creating .env.local from template..."
+	@cp .env.local.template .env.local
+	@echo ""
+	@echo "✅ Created .env.local"
+	@echo ""
+	@echo "📝 Next steps:"
+	@echo "  1. Edit .env.local and set your values"
+	@echo "  2. Most important: IMAGE_REPOSITORY=your-quay-username"
+	@echo "  3. Optional: EXPECTED_CLUSTER=your-test-cluster"
+	@echo ""
+	@echo "View current settings: make show-env"
+
+.PHONY: show-env
+show-env: ## Show current environment configuration
+	@echo "============================================"
+	@echo "Current Environment Configuration"
+	@echo "============================================"
+	@echo ""
+	@echo "=== Image Configuration ==="
+	@echo "IMAGE_REGISTRY:          $(IMAGE_REGISTRY)"
+	@echo "IMAGE_REPOSITORY:        $(IMAGE_REPOSITORY)"
+	@echo "OPERATOR_NAME:           $(OPERATOR_NAME)"
+	@echo "OPERATOR_NAMESPACE:      $(OPERATOR_NAMESPACE)"
+	@echo "OPERATOR_IMAGE_TAG:      $(OPERATOR_IMAGE_TAG)"
+	@echo ""
+	@echo "=== Computed Image URIs ==="
+	@echo "Application image:       $(IMAGE_REGISTRY)/$(IMAGE_REPOSITORY)/$(OPERATOR_NAME):$(OPERATOR_IMAGE_TAG)"
+	@echo "PKO package image:       $(IMAGE_REGISTRY)/$(IMAGE_REPOSITORY)/$(OPERATOR_NAME)-pko:$(OPERATOR_IMAGE_TAG)"
+	@echo ""
+	@echo "=== Build Configuration ==="
+	@echo "CONTAINER_ENGINE:        $(CONTAINER_ENGINE)"
+	@echo "FIPS_ENABLED:            $(FIPS_ENABLED)"
+	@echo "ALLOW_DIRTY_CHECKOUT:    $(ALLOW_DIRTY_CHECKOUT)"
+	@echo ""
+	@echo "=== Cluster Safety ==="
+	@echo "EXPECTED_CLUSTER:        $(EXPECTED_CLUSTER)"
+	@if [ -z "$(EXPECTED_CLUSTER)" ]; then \
+		echo "⚠️  Warning: EXPECTED_CLUSTER not set"; \
+		echo "   Cluster safety checks disabled"; \
+		echo "   Set in .env.local or via: export EXPECTED_CLUSTER=my-cluster"; \
+	fi
+	@echo ""
+	@echo "=== Configuration Source ==="
+	@if [ -f .env.local ]; then \
+		echo "✅ Using .env.local for local overrides"; \
+	else \
+		echo "❌ No .env.local found"; \
+		echo "   Create with: make init-env"; \
+	fi
+	@echo ""
+	@echo "============================================"
 
 .PHONY: boilerplate-update
 boilerplate-update:

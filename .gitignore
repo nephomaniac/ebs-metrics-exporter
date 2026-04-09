@@ -38,6 +38,9 @@ go.work
 # Temporary files
 /tmp/
 
+# Local environment configuration (personal settings, not committed)
+.env.local
+
 # Boilerplate generated content (except generated-includes.mk which we track)
 /boilerplate/_lib/
 /boilerplate/_output/
