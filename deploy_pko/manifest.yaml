@@ -14,9 +14,8 @@ spec:
   - name: deploy
   availabilityProbes:
   - probes:
-    - condition:
-        type: Available
-        status: 'True'
+    # DaemonSets don't have .status.conditions like Deployments
+    # Only use fieldsEqual to check readiness
     - fieldsEqual:
         fieldA: .status.numberReady
         fieldB: .status.desiredNumberScheduled
