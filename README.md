@@ -10,6 +10,7 @@ A lightweight Prometheus exporter for Amazon EBS (Elastic Block Store) performan
 - **[Quick Start (Local Development)](#quick-start-local-development)** - Get up and running in minutes (see below)
 - **[Configuration Guide](CONFIG.md)** - Complete configuration reference
 - **[Deployment Guide](DEPLOYMENT.md)** - Production deployment procedures
+- **[Operations Guide](OPERATIONS.md)** - Day-2 operations, config updates, PKO behavior
 
 ### Development
 - **[Development Workflow](#quick-start-development-workflow)** - Build, deploy, test, iterate (this document)
@@ -834,6 +835,38 @@ View logs from all pods.
 make local-logs
 # Shows last 50 lines from all pods
 ```
+
+#### `make local-restart`
+Restart DaemonSet pods to apply configuration changes.
+
+**When to use:**
+- After editing ConfigMap via `oc edit`
+- After making manual configuration changes
+- To apply new configuration without redeploying
+
+**What it does:**
+1. Checks for running pods
+2. Deletes all pods (DaemonSet recreates them)
+3. Waits for restart
+4. Shows deployment status
+
+**Why needed:**
+- Pods don't automatically restart when ConfigMap changes
+- This is standard Kubernetes behavior
+- Manual restart applies new configuration
+
+**Example:**
+```bash
+# 1. Edit ConfigMap
+oc edit configmap ebs-metrics-exporter-config -n openshift-sre-ebs-metrics
+
+# 2. Restart pods to apply changes
+make local-restart
+
+# Output shows pods being deleted and recreated
+```
+
+**See also:** [OPERATIONS.md](OPERATIONS.md) for detailed configuration management procedures.
 
 ### Utility Targets
 

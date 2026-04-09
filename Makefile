@@ -300,6 +300,32 @@ local-logs: ## View logs from pods
 	@echo ""
 	@oc logs -n $(OPERATOR_NAMESPACE) -l app.kubernetes.io/name=$(OPERATOR_NAME) --tail=50 --all-containers=true
 
+.PHONY: local-restart
+local-restart: ## Restart DaemonSet pods (e.g., after ConfigMap changes)
+	@echo "============================================"
+	@echo "Restarting DaemonSet Pods"
+	@echo "============================================"
+	@echo "Namespace: $(OPERATOR_NAMESPACE)"
+	@echo "DaemonSet: $(OPERATOR_NAME)"
+	@echo ""
+	@echo "This will delete all pods and let DaemonSet recreate them."
+	@echo "Useful after editing ConfigMap to apply configuration changes."
+	@echo ""
+	@POD_COUNT=$$(oc get pods -n $(OPERATOR_NAMESPACE) -l app.kubernetes.io/name=$(OPERATOR_NAME) --field-selector=status.phase=Running 2>/dev/null | grep -c Running || echo "0"); \
+	if [ "$$POD_COUNT" -eq "0" ]; then \
+		echo "⚠️  No running pods found"; \
+		exit 1; \
+	fi; \
+	echo "Current running pods: $$POD_COUNT"; \
+	echo ""; \
+	echo "Deleting pods..."; \
+	oc delete pods -n $(OPERATOR_NAMESPACE) -l app.kubernetes.io/name=$(OPERATOR_NAME); \
+	echo ""; \
+	echo "Waiting for pods to restart..."; \
+	sleep 5; \
+	echo ""; \
+	$(MAKE) local-status
+
 .PHONY: local-test-all
 local-test-all: ## Run all tests (mimics CI checks)
 	@echo "Running unit tests..."
