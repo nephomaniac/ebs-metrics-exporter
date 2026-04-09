@@ -13,13 +13,17 @@ import (
 
 	"github.com/nephomaniac/ebs-metrics-exporter/pkg/collector"
 	"github.com/nephomaniac/ebs-metrics-exporter/pkg/config"
+	"github.com/nephomaniac/ebs-metrics-exporter/pkg/reconciler"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 var (
+	mode       = flag.String("mode", "exporter", "Run mode: exporter (default) or reconciler")
 	configPath = flag.String("config", "/etc/ebs-exporter/config.yaml", "Path to configuration file")
 	port       = flag.Int("port", 8090, "Port to serve metrics on")
+	reconcilerNamespace = flag.String("reconciler-namespace", "openshift-sre-ebs-metrics", "Namespace to watch (reconciler mode only)")
+	reconcilerInterval  = flag.Int("reconciler-interval", 30, "Reconciliation interval in seconds (reconciler mode only)")
 	version    = "dev"
 	commit     = "unknown"
 	buildDate  = "unknown"
@@ -33,6 +37,20 @@ func main() {
 
 	log.Printf("EBS Metrics Exporter starting")
 	log.Printf("Version: %s, Commit: %s, BuildDate: %s", version, commit, buildDate)
+	log.Printf("Mode: %s", *mode)
+
+	// Route to appropriate mode
+	switch *mode {
+	case "exporter":
+		runExporter()
+	case "reconciler":
+		runReconciler()
+	default:
+		log.Fatalf("Invalid mode: %s (valid modes: exporter, reconciler)", *mode)
+	}
+}
+
+func runExporter() {
 	log.Printf("Config file: %s", *configPath)
 
 	// Load configuration
@@ -163,4 +181,51 @@ func main() {
 	}
 
 	log.Println("Exporter stopped")
+}
+
+func runReconciler() {
+	log.Printf("Namespace: %s", *reconcilerNamespace)
+	log.Printf("Interval: %ds", *reconcilerInterval)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Handle shutdown gracefully
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		sig := <-sigChan
+		log.Printf("Received signal %v, shutting down...", sig)
+		cancel()
+	}()
+
+	// Create reconciler
+	r, err := reconciler.New(*reconcilerNamespace)
+	if err != nil {
+		log.Fatalf("Failed to create reconciler: %v", err)
+	}
+
+	// Start reconciliation loop
+	ticker := time.NewTicker(time.Duration(*reconcilerInterval) * time.Second)
+	defer ticker.Stop()
+
+	log.Println("Reconciler started, watching for drift...")
+
+	// Run initial reconciliation
+	if err := r.Reconcile(ctx); err != nil {
+		log.Printf("ERROR: Initial reconciliation failed: %v", err)
+	}
+
+	// Periodic reconciliation
+	for {
+		select {
+		case <-ctx.Done():
+			log.Println("Shutting down reconciler")
+			return
+		case <-ticker.C:
+			if err := r.Reconcile(ctx); err != nil {
+				log.Printf("ERROR: Reconciliation failed: %v", err)
+			}
+		}
+	}
 }

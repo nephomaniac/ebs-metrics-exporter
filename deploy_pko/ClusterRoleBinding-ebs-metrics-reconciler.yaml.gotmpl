@@ -1,0 +1,17 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ebs-metrics-reconciler
+  labels:
+    app.kubernetes.io/name: ebs-metrics-reconciler
+    app.kubernetes.io/part-of: ebs-metrics-exporter
+  annotations:
+    package-operator.run/phase: rbac
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: ebs-metrics-reconciler
+subjects:
+- kind: ServiceAccount
+  name: ebs-metrics-exporter
+  namespace: {{ .config.namespace }}
