@@ -21,17 +21,19 @@ type EBSCollector struct {
 	pvcName      string
 
 	// Counter metrics
-	volumePerformanceExceededIOPSTotal       *prometheus.Desc
-	volumePerformanceExceededThroughputTotal *prometheus.Desc
-	instancePerformanceExceededIOPSTotal     *prometheus.Desc
-	instancePerformanceExceededThroughputTotal *prometheus.Desc
-	totalReadOpsTotal                        *prometheus.Desc
-	totalWriteOpsTotal                       *prometheus.Desc
-	totalReadBytesTotal                      *prometheus.Desc
-	totalWriteBytesTotal                     *prometheus.Desc
+	volumePerformanceExceededIOPS       *prometheus.Desc
+	volumePerformanceExceededThroughput *prometheus.Desc
+	instancePerformanceExceededIOPS     *prometheus.Desc
+	instancePerformanceExceededThroughput *prometheus.Desc
+	totalReadOps                        *prometheus.Desc
+	totalWriteOps                       *prometheus.Desc
+	totalReadBytes                      *prometheus.Desc
+	totalWriteBytes                     *prometheus.Desc
+	totalReadTime                       *prometheus.Desc
+	totalWriteTime                      *prometheus.Desc
 
 	// Gauge metrics
-	volumeQueueLength                        *prometheus.Desc
+	volumeQueueLength                   *prometheus.Desc
 }
 
 // NewEBSCollector creates a new EBS collector with volume metadata
@@ -56,51 +58,63 @@ func NewEBSCollector(devicePath, volumeType, pvcNamespace, pvcName string) (*EBS
 		volumeType:   volumeType,
 		pvcNamespace: pvcNamespace,
 		pvcName:      pvcName,
-		volumePerformanceExceededIOPSTotal: prometheus.NewDesc(
-			"ebs_volume_performance_exceeded_iops_total",
+		volumePerformanceExceededIOPS: prometheus.NewDesc(
+			"ebs_volume_performance_exceeded_iops",
 			"Total time in microseconds that the EBS volume IOPS limit was exceeded",
 			labels,
 			nil,
 		),
-		volumePerformanceExceededThroughputTotal: prometheus.NewDesc(
-			"ebs_volume_performance_exceeded_throughput_total",
+		volumePerformanceExceededThroughput: prometheus.NewDesc(
+			"ebs_volume_performance_exceeded_throughput",
 			"Total time in microseconds that the EBS volume throughput limit was exceeded",
 			labels,
 			nil,
 		),
-		instancePerformanceExceededIOPSTotal: prometheus.NewDesc(
-			"ebs_instance_performance_exceeded_iops_total",
+		instancePerformanceExceededIOPS: prometheus.NewDesc(
+			"ebs_instance_performance_exceeded_iops",
 			"Total time in microseconds that the EC2 instance EBS IOPS limit was exceeded",
 			labels,
 			nil,
 		),
-		instancePerformanceExceededThroughputTotal: prometheus.NewDesc(
-			"ebs_instance_performance_exceeded_throughput_total",
+		instancePerformanceExceededThroughput: prometheus.NewDesc(
+			"ebs_instance_performance_exceeded_throughput",
 			"Total time in microseconds that the EC2 instance EBS throughput limit was exceeded",
 			labels,
 			nil,
 		),
-		totalReadOpsTotal: prometheus.NewDesc(
-			"ebs_total_read_ops_total",
+		totalReadOps: prometheus.NewDesc(
+			"ebs_total_read_ops",
 			"Total number of read operations",
 			labels,
 			nil,
 		),
-		totalWriteOpsTotal: prometheus.NewDesc(
-			"ebs_total_write_ops_total",
+		totalWriteOps: prometheus.NewDesc(
+			"ebs_total_write_ops",
 			"Total number of write operations",
 			labels,
 			nil,
 		),
-		totalReadBytesTotal: prometheus.NewDesc(
-			"ebs_total_read_bytes_total",
+		totalReadBytes: prometheus.NewDesc(
+			"ebs_total_read_bytes",
 			"Total bytes read",
 			labels,
 			nil,
 		),
-		totalWriteBytesTotal: prometheus.NewDesc(
-			"ebs_total_write_bytes_total",
+		totalWriteBytes: prometheus.NewDesc(
+			"ebs_total_write_bytes",
 			"Total bytes written",
+			labels,
+			nil,
+		),
+		totalReadTime: prometheus.NewDesc(
+			"ebs_total_read_time",
+			"Total time in microseconds spent on read operations",
+			labels,
+			nil,
+		),
+		totalWriteTime: prometheus.NewDesc(
+			"ebs_total_write_time",
+			"Total time in microseconds spent on write operations",
 			labels,
 			nil,
 		),
@@ -115,14 +129,16 @@ func NewEBSCollector(devicePath, volumeType, pvcNamespace, pvcName string) (*EBS
 
 // Describe implements the prometheus.Collector interface
 func (c *EBSCollector) Describe(ch chan<- *prometheus.Desc) {
-	ch <- c.volumePerformanceExceededIOPSTotal
-	ch <- c.volumePerformanceExceededThroughputTotal
-	ch <- c.instancePerformanceExceededIOPSTotal
-	ch <- c.instancePerformanceExceededThroughputTotal
-	ch <- c.totalReadOpsTotal
-	ch <- c.totalWriteOpsTotal
-	ch <- c.totalReadBytesTotal
-	ch <- c.totalWriteBytesTotal
+	ch <- c.volumePerformanceExceededIOPS
+	ch <- c.volumePerformanceExceededThroughput
+	ch <- c.instancePerformanceExceededIOPS
+	ch <- c.instancePerformanceExceededThroughput
+	ch <- c.totalReadOps
+	ch <- c.totalWriteOps
+	ch <- c.totalReadBytes
+	ch <- c.totalWriteBytes
+	ch <- c.totalReadTime
+	ch <- c.totalWriteTime
 	ch <- c.volumeQueueLength
 }
 
@@ -146,74 +162,92 @@ func (c *EBSCollector) Collect(ch chan<- prometheus.Metric) {
 	}
 
 	// Counter metrics
-	if c.shouldExportMetric("ebs_volume_performance_exceeded_iops_total") {
+	if c.shouldExportMetric("ebs_volume_performance_exceeded_iops") {
 		ch <- prometheus.MustNewConstMetric(
-			c.volumePerformanceExceededIOPSTotal,
+			c.volumePerformanceExceededIOPS,
 			prometheus.CounterValue,
 			float64(stats.EBSVolumePerformanceExceededIOPS),
 			labels...,
 		)
 	}
 
-	if c.shouldExportMetric("ebs_volume_performance_exceeded_throughput_total") {
+	if c.shouldExportMetric("ebs_volume_performance_exceeded_throughput") {
 		ch <- prometheus.MustNewConstMetric(
-			c.volumePerformanceExceededThroughputTotal,
+			c.volumePerformanceExceededThroughput,
 			prometheus.CounterValue,
 			float64(stats.EBSVolumePerformanceExceededTP),
 			labels...,
 		)
 	}
 
-	if c.shouldExportMetric("ebs_instance_performance_exceeded_iops_total") {
+	if c.shouldExportMetric("ebs_instance_performance_exceeded_iops") {
 		ch <- prometheus.MustNewConstMetric(
-			c.instancePerformanceExceededIOPSTotal,
+			c.instancePerformanceExceededIOPS,
 			prometheus.CounterValue,
 			float64(stats.EBSInstancePerformanceExceededIOPS),
 			labels...,
 		)
 	}
 
-	if c.shouldExportMetric("ebs_instance_performance_exceeded_throughput_total") {
+	if c.shouldExportMetric("ebs_instance_performance_exceeded_throughput") {
 		ch <- prometheus.MustNewConstMetric(
-			c.instancePerformanceExceededThroughputTotal,
+			c.instancePerformanceExceededThroughput,
 			prometheus.CounterValue,
 			float64(stats.EBSInstancePerformanceExceededTP),
 			labels...,
 		)
 	}
 
-	if c.shouldExportMetric("ebs_total_read_ops_total") {
+	if c.shouldExportMetric("ebs_total_read_ops") {
 		ch <- prometheus.MustNewConstMetric(
-			c.totalReadOpsTotal,
+			c.totalReadOps,
 			prometheus.CounterValue,
 			float64(stats.TotalReadOps),
 			labels...,
 		)
 	}
 
-	if c.shouldExportMetric("ebs_total_write_ops_total") {
+	if c.shouldExportMetric("ebs_total_write_ops") {
 		ch <- prometheus.MustNewConstMetric(
-			c.totalWriteOpsTotal,
+			c.totalWriteOps,
 			prometheus.CounterValue,
 			float64(stats.TotalWriteOps),
 			labels...,
 		)
 	}
 
-	if c.shouldExportMetric("ebs_total_read_bytes_total") {
+	if c.shouldExportMetric("ebs_total_read_bytes") {
 		ch <- prometheus.MustNewConstMetric(
-			c.totalReadBytesTotal,
+			c.totalReadBytes,
 			prometheus.CounterValue,
 			float64(stats.TotalReadBytes),
 			labels...,
 		)
 	}
 
-	if c.shouldExportMetric("ebs_total_write_bytes_total") {
+	if c.shouldExportMetric("ebs_total_write_bytes") {
 		ch <- prometheus.MustNewConstMetric(
-			c.totalWriteBytesTotal,
+			c.totalWriteBytes,
 			prometheus.CounterValue,
 			float64(stats.TotalWriteBytes),
+			labels...,
+		)
+	}
+
+	if c.shouldExportMetric("ebs_total_read_time") {
+		ch <- prometheus.MustNewConstMetric(
+			c.totalReadTime,
+			prometheus.CounterValue,
+			float64(stats.TotalReadTime),
+			labels...,
+		)
+	}
+
+	if c.shouldExportMetric("ebs_total_write_time") {
+		ch <- prometheus.MustNewConstMetric(
+			c.totalWriteTime,
+			prometheus.CounterValue,
+			float64(stats.TotalWriteTime),
 			labels...,
 		)
 	}
