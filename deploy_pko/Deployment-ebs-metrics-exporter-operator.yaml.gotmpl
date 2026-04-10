@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ebs-metrics-exporter-operator
+  namespace: openshift-sre-ebs-metrics
+  labels:
+    app.kubernetes.io/name: ebs-metrics-exporter-operator
+    app.kubernetes.io/part-of: ebs-metrics-exporter
+    app.kubernetes.io/component: operator
+  annotations:
+    package-operator.run/phase: operator
+    package-operator.run/collision-protection: IfNoController
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ebs-metrics-exporter-operator
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ebs-metrics-exporter-operator
+        app.kubernetes.io/part-of: ebs-metrics-exporter
+        app.kubernetes.io/component: operator
+    spec:
+      serviceAccountName: ebs-metrics-exporter
+      containers:
+      - name: operator
+        image: {{ .config.image }}
+        imagePullPolicy: Always
+        command:
+        - /usr/local/bin/ebs-metrics-exporter
+        args:
+        - --mode=reconciler
+        - --reconciler-namespace=openshift-sre-ebs-metrics
+        ports:
+        - containerPort: 8081
+          name: metrics
+          protocol: TCP
+        - containerPort: 8082
+          name: health
+          protocol: TCP
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: health
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: health
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "10m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          capabilities:
+            drop:
+            - ALL
+          seccompProfile:
+            type: RuntimeDefault

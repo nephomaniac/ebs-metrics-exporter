@@ -16,17 +16,23 @@ import (
 	"github.com/nephomaniac/ebs-metrics-exporter/pkg/reconciler"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"k8s.io/apimachinery/pkg/runtime"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	_ "k8s.io/client-go/plugin/pkg/client/auth"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/healthz"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 )
 
 var (
-	mode       = flag.String("mode", "exporter", "Run mode: exporter (default) or reconciler")
-	configPath = flag.String("config", "/etc/ebs-exporter/config.yaml", "Path to configuration file")
-	port       = flag.Int("port", 8090, "Port to serve metrics on")
+	mode                = flag.String("mode", "exporter", "Run mode: exporter (default) or reconciler")
+	configPath          = flag.String("config", "/etc/ebs-exporter/config.yaml", "Path to configuration file")
+	port                = flag.Int("port", 8090, "Port to serve metrics on")
 	reconcilerNamespace = flag.String("reconciler-namespace", "openshift-sre-ebs-metrics", "Namespace to watch (reconciler mode only)")
-	reconcilerInterval  = flag.Int("reconciler-interval", 30, "Reconciliation interval in seconds (reconciler mode only)")
-	version    = "dev"
-	commit     = "unknown"
-	buildDate  = "unknown"
+	version             = "dev"
+	commit              = "unknown"
+	buildDate           = "unknown"
 )
 
 func main() {
@@ -185,47 +191,63 @@ func runExporter() {
 
 func runReconciler() {
 	log.Printf("Namespace: %s", *reconcilerNamespace)
-	log.Printf("Interval: %ds", *reconcilerInterval)
+	log.Println("EBS Metrics Exporter Operator - event-driven configuration validation and health monitoring")
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	// Set up logger for controller-runtime
+	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
 
-	// Handle shutdown gracefully
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		sig := <-sigChan
-		log.Printf("Received signal %v, shutting down...", sig)
-		cancel()
-	}()
+	// Create Kubernetes runtime scheme
+	scheme := runtime.NewScheme()
+	if err := clientgoscheme.AddToScheme(scheme); err != nil {
+		log.Fatalf("Failed to add scheme: %v", err)
+	}
 
-	// Create reconciler
-	r, err := reconciler.New(*reconcilerNamespace)
+	// Create controller manager with operator metrics on port 8081
+	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+		Scheme: scheme,
+		// Expose operator metrics on port 8081
+		Metrics: metricsserver.Options{
+			BindAddress: ":8081",
+		},
+		// Health probe on port 8082
+		HealthProbeBindAddress: ":8082",
+	})
 	if err != nil {
-		log.Fatalf("Failed to create reconciler: %v", err)
+		log.Fatalf("Failed to create manager: %v", err)
 	}
 
-	// Start reconciliation loop
-	ticker := time.NewTicker(time.Duration(*reconcilerInterval) * time.Second)
-	defer ticker.Stop()
-
-	log.Println("Reconciler started, watching for drift...")
-
-	// Run initial reconciliation
-	if err := r.Reconcile(ctx); err != nil {
-		log.Printf("ERROR: Initial reconciliation failed: %v", err)
+	// Create and register reconciler
+	r := &reconciler.Reconciler{
+		Client:    mgr.GetClient(),
+		Scheme:    mgr.GetScheme(),
+		Namespace: *reconcilerNamespace,
 	}
 
-	// Periodic reconciliation
-	for {
-		select {
-		case <-ctx.Done():
-			log.Println("Shutting down reconciler")
-			return
-		case <-ticker.C:
-			if err := r.Reconcile(ctx); err != nil {
-				log.Printf("ERROR: Reconciliation failed: %v", err)
-			}
-		}
+	if err := r.SetupWithManager(mgr); err != nil {
+		log.Fatalf("Failed to setup reconciler with manager: %v", err)
 	}
+
+	// Add health check endpoints
+	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
+		log.Fatalf("Failed to add healthz check: %v", err)
+	}
+	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
+		log.Fatalf("Failed to add readyz check: %v", err)
+	}
+
+	log.Println("Operator started - functions:")
+	log.Println("  ✓ Configuration validation (invalid config → alert via metrics)")
+	log.Println("  ✓ Pod restart coordination (config change → rolling restart)")
+	log.Println("  ✓ DaemonSet health monitoring (pod readiness → metrics)")
+	log.Printf("  ✓ Watching: %s/%s (ConfigMap)", *reconcilerNamespace, reconciler.ConfigMapName)
+	log.Printf("  ✓ Watching: %s/%s (DaemonSet)", *reconcilerNamespace, reconciler.DaemonSetName)
+	log.Println("  ✓ Operator metrics: http://localhost:8081/metrics")
+	log.Println("  ✓ Health probe: http://localhost:8082/healthz")
+
+	// Start manager (blocks until signal)
+	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+		log.Fatalf("Manager exited with error: %v", err)
+	}
+
+	log.Println("Operator stopped")
 }

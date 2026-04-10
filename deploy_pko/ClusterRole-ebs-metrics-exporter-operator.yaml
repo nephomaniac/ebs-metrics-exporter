@@ -1,12 +1,13 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: ebs-metrics-reconciler
+  name: ebs-metrics-exporter-operator
   labels:
-    app.kubernetes.io/name: ebs-metrics-reconciler
+    app.kubernetes.io/name: ebs-metrics-exporter-operator
     app.kubernetes.io/part-of: ebs-metrics-exporter
   annotations:
     package-operator.run/phase: rbac
+    package-operator.run/collision-protection: IfNoController
 rules:
 - apiGroups:
   - ""
@@ -16,7 +17,6 @@ rules:
   - get
   - list
   - watch
-  - update
 - apiGroups:
   - apps
   resources:

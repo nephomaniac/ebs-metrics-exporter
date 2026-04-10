@@ -121,8 +121,8 @@ local-ci: ## Build and test everything (mimics CI checks)
 	@echo "✅ Local CI complete!"
 	@echo "============================================"
 	@echo "Built images:"
-	@echo "  - $(OPERATOR_IMAGE_URI_LATEST)"
-	@echo "  - $(OPERATOR_IMAGE_URI_LATEST)-pko"
+	@echo "  - $(IMAGE_REGISTRY)/$(IMAGE_REPOSITORY)/$(OPERATOR_NAME):$(OPERATOR_IMAGE_TAG)"
+	@echo "  - $(IMAGE_REGISTRY)/$(IMAGE_REPOSITORY)/$(OPERATOR_NAME)-pko:$(OPERATOR_IMAGE_TAG)"
 	@echo ""
 	@echo "Next steps:"
 	@echo "  make local-push-all    # Push images to registry"
@@ -182,9 +182,9 @@ local-build-all: ## Build both images (mimics Konflux)
 local-build-pko: ## Build PKO package image (mimics Konflux PKO pipeline)
 	@echo "Building PKO package image (mimics .tekton/*-pko-push.yaml)..."
 	${CONTAINER_ENGINE} build -f build/Dockerfile.pko \
-		-t $(OPERATOR_IMAGE_URI_LATEST)-pko \
+		-t $(IMAGE_REGISTRY)/$(IMAGE_REPOSITORY)/$(OPERATOR_NAME)-pko:$(OPERATOR_IMAGE_TAG) \
 		deploy_pko/
-	@echo "✅ Built: $(OPERATOR_IMAGE_URI_LATEST)-pko"
+	@echo "✅ Built: $(IMAGE_REGISTRY)/$(IMAGE_REPOSITORY)/$(OPERATOR_NAME)-pko:$(OPERATOR_IMAGE_TAG)"
 
 .PHONY: local-push-all
 local-push-all: ## Push both images
@@ -198,8 +198,8 @@ local-push-all: ## Push both images
 .PHONY: local-push-pko
 local-push-pko: ## Push PKO package image
 	@echo "Pushing PKO package image..."
-	${CONTAINER_ENGINE} push $(OPERATOR_IMAGE_URI_LATEST)-pko
-	@echo "✅ Pushed: $(OPERATOR_IMAGE_URI_LATEST)-pko"
+	${CONTAINER_ENGINE} push $(IMAGE_REGISTRY)/$(IMAGE_REPOSITORY)/$(OPERATOR_NAME)-pko:$(OPERATOR_IMAGE_TAG)
+	@echo "✅ Pushed: $(IMAGE_REGISTRY)/$(IMAGE_REPOSITORY)/$(OPERATOR_NAME)-pko:$(OPERATOR_IMAGE_TAG)"
 
 .PHONY: local-deploy
 local-deploy: check-cluster ## Deploy via PKO operator (processes ClusterPackage template)
