@@ -944,6 +944,29 @@ For PVC-backed volumes:
 - `pvc_namespace` - Kubernetes namespace of the PVC
 - `pvc_name` - Name of the PersistentVolumeClaim
 
+### CloudWatch-Compatible Derived Metrics
+
+For users migrating from CloudWatch or preferring binary alerting, **Prometheus recording rules** automatically generate CloudWatch-compatible metrics:
+
+**Binary Check Metrics** (0 = not exceeded, 1 = exceeded):
+- `ebs_volume_throughput_exceeded_check` - Matches CloudWatch `VolumeThroughputExceededCheck`
+- `ebs_volume_iops_exceeded_check` - Matches CloudWatch `VolumeIOPSExceededCheck`
+- `ebs_instance_throughput_exceeded_check` - Instance-level (not available in CloudWatch)
+- `ebs_instance_iops_exceeded_check` - Instance-level (not available in CloudWatch)
+
+**Percentage Metrics** (% of time exceeding limits):
+- `ebs_volume_throughput_exceeded_percent`
+- `ebs_volume_iops_exceeded_percent`
+- `ebs_instance_throughput_exceeded_percent`
+- `ebs_instance_iops_exceeded_percent`
+
+**Key Difference:**
+- **CloudWatch**: Binary check, only detects "sustained" exceedance (>30s per minute)
+- **Our raw metrics**: Precise microseconds, captures ALL exceedance including brief bursts
+- **These derived metrics**: Best of both - CloudWatch compatibility + our precision
+
+See **[docs/cloudwatch-compatible-metrics.md](docs/cloudwatch-compatible-metrics.md)** for detailed comparison and migration guide.
+
 ## Configuration
 
 The exporter uses **ConfigMap-based configuration** for all runtime settings. See:

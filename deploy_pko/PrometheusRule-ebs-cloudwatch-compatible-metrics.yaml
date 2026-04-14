@@ -1,0 +1,111 @@
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: ebs-cloudwatch-compatible-metrics
+  namespace: openshift-sre-ebs-metrics
+  labels:
+    prometheus: sre
+    role: alert-rules
+spec:
+  groups:
+  - name: ebs_cloudwatch_compatibility
+    interval: 60s
+    rules:
+    # CloudWatch-Compatible Binary Check Metrics
+    #
+    # WHY THESE RULES EXIST:
+    # CloudWatch provides EBS performance exceeded metrics as binary checks (0 or 1)
+    # that indicate whether limits were "consistently" exceeded in a 1-minute period.
+    # These recording rules provide the same behavior for users migrating from CloudWatch
+    # or who prefer simple binary alerting (exceeded: yes/no) over precise measurements.
+    #
+    # HOW CLOUDWATCH DIFFERS FROM OUR RAW METRICS:
+    #
+    # CloudWatch (VolumeThroughputExceededCheck, VolumeIOPSExceededCheck):
+    #   - Binary value: 0 (not exceeded) or 1 (exceeded)
+    #   - Only triggers when "consistently" exceeding limits in a 1-minute window
+    #   - Misses brief intermittent bursts (<30s per minute)
+    #   - Volume-level only (no instance-level metrics)
+    #   - 5-10 minute data lag due to AWS aggregation
+    #   - Sparse: only publishes datapoints when exceeded
+    #
+    # Our Raw Metrics (ebs_volume_performance_exceeded_*_total):
+    #   - Precise value: cumulative microseconds spent exceeding limits
+    #   - Captures ALL exceedance, including brief 1-2 second bursts
+    #   - Provides both volume-level AND instance-level metrics
+    #   - Real-time: 30-second collection interval
+    #   - Always present: even when 0, proving monitoring is working
+    #   - Enables advanced queries: % of time at limits, rate of burst consumption
+    #
+    # EXAMPLE:
+    # A volume with brief 2-second throughput bursts every minute:
+    #   - CloudWatch: 0 (not "consistent" enough to trigger)
+    #   - Our raw metric: 120,000,000 microseconds after 1 hour (120 seconds total)
+    #   - This recording rule: 0 (matches CloudWatch behavior)
+    #
+    # THRESHOLD RATIONALE:
+    # CloudWatch's "consistently" is undefined, but >30 seconds (50% of a minute)
+    # is a reasonable interpretation based on observed CloudWatch behavior during
+    # cluster creation events where sustained exceedance was detected.
+    #
+    # Formula: rate(counter[1m]) * 60 = seconds exceeded in last minute
+    #          >30 seconds = "consistent" exceedance
+
+    # Volume-level throughput exceeded (matches CloudWatch VolumeThroughputExceededCheck)
+    - record: ebs_volume_throughput_exceeded_check
+      expr: |
+        (
+          rate(ebs_volume_performance_exceeded_throughput_total[1m]) * 60 > bool 30
+        )
+
+    # Volume-level IOPS exceeded (matches CloudWatch VolumeIOPSExceededCheck)
+    - record: ebs_volume_iops_exceeded_check
+      expr: |
+        (
+          rate(ebs_volume_performance_exceeded_iops_total[1m]) * 60 > bool 30
+        )
+
+    # Instance-level throughput exceeded (NOT available in CloudWatch)
+    - record: ebs_instance_throughput_exceeded_check
+      expr: |
+        (
+          rate(ebs_instance_performance_exceeded_throughput_total[1m]) * 60 > bool 30
+        )
+
+    # Instance-level IOPS exceeded (NOT available in CloudWatch)
+    - record: ebs_instance_iops_exceeded_check
+      expr: |
+        (
+          rate(ebs_instance_performance_exceeded_iops_total[1m]) * 60 > bool 30
+        )
+
+    # Additional useful derived metrics (not CloudWatch-compatible)
+
+    # Percentage of time exceeding throughput limits (volume-level)
+    - record: ebs_volume_throughput_exceeded_percent
+      expr: |
+        (
+          rate(ebs_volume_performance_exceeded_throughput_total[5m]) / 1000000 * 100
+        )
+
+    # Percentage of time exceeding IOPS limits (volume-level)
+    - record: ebs_volume_iops_exceeded_percent
+      expr: |
+        (
+          rate(ebs_volume_performance_exceeded_iops_total[5m]) / 1000000 * 100
+        )
+
+    # Percentage of time exceeding throughput limits (instance-level)
+    - record: ebs_instance_throughput_exceeded_percent
+      expr: |
+        (
+          rate(ebs_instance_performance_exceeded_throughput_total[5m]) / 1000000 * 100
+        )
+
+    # Percentage of time exceeding IOPS limits (instance-level)
+    - record: ebs_instance_iops_exceeded_percent
+      expr: |
+        (
+          rate(ebs_instance_performance_exceeded_iops_total[1m]) / 1000000 * 100
+        )
