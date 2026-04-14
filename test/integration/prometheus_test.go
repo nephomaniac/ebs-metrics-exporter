@@ -31,8 +31,8 @@ func TestPrometheusIngestion(t *testing.T) {
 	// Use oc to query Prometheus via the thanos-querier route
 	// This is safer than port-forwarding and works across all clusters
 	queries := []string{
-		`ebs_total_read_ops`,
-		`ebs_total_write_ops`,
+		`ebs_total_read_ops_total`,
+		`ebs_total_write_ops_total`,
 		`ebs_volume_queue_length`,
 	}
 
@@ -321,7 +321,7 @@ func TestWaitForMetricIngestion(t *testing.T) {
 		stdout, _, err := runCommand(t, "oc", "exec", "-n", "openshift-monitoring",
 			"prometheus-k8s-0", "-c", "prometheus", "--",
 			"promtool", "query", "instant", "http://localhost:9090",
-			"ebs_total_read_ops")
+			"ebs_total_read_ops_total")
 
 		if err == nil && strings.Contains(stdout, "=>") {
 			t.Log("✅ Metrics found in Prometheus!")
