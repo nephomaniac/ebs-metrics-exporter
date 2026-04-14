@@ -25,7 +25,7 @@ spec:
       serviceAccountName: ebs-metrics-exporter
       containers:
       - name: operator
-        image: {{ .config.image }}
+        image: {{ .config.operatorImage }}
         imagePullPolicy: Always
         command:
         - /usr/local/bin/ebs-metrics-exporter
