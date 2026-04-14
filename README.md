@@ -73,7 +73,6 @@ See **[CloudWatch-Compatible Metrics Guide](docs/cloudwatch-compatible-metrics.m
 ### Architecture & Design
 - **[Refactoring Summary](REFACTORING_SUMMARY.md)** - Architecture decisions and rationale
 - **[Architecture Update](ARCHITECTURE_UPDATE.md)** - Technical architecture details
-- **[CloudWatch Cost Analysis](COST_ANALYSIS_TODO.md)** - Cost comparison vs CloudWatch
 
 ### Legacy Documentation
 - **[README (Refactored)](README.refactored.md)** - Previous iteration documentation
