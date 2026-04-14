@@ -7,6 +7,8 @@ metadata:
   labels:
     prometheus: sre
     role: alert-rules
+  annotations:
+    package-operator.run/phase: deploy
 spec:
   groups:
   - name: ebs_cloudwatch_compatibility
