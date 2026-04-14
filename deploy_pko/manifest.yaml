@@ -28,7 +28,7 @@ spec:
     openAPIV3Schema:
       type: object
       properties:
-        image:
+        operatorImage:
           description: EBS metrics exporter image to deploy (must be immutable tag)
           type: string
           default: ""
