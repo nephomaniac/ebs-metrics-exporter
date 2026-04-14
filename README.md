@@ -30,16 +30,21 @@ Automatically generated via Prometheus recording rules for CloudWatch migration 
 
 | Metric Name | Type | Description | CloudWatch Equivalent |
 |-------------|------|-------------|----------------------|
-| `ebs_volume_throughput_exceeded_check` | Binary (0/1) | 1 if volume exceeded throughput >30s in last minute | `VolumeThroughputExceededCheck` |
-| `ebs_volume_iops_exceeded_check` | Binary (0/1) | 1 if volume exceeded IOPS >30s in last minute | `VolumeIOPSExceededCheck` |
-| `ebs_instance_throughput_exceeded_check` | Binary (0/1) | 1 if instance exceeded throughput >30s in last minute | ❌ Not available |
-| `ebs_instance_iops_exceeded_check` | Binary (0/1) | 1 if instance exceeded IOPS >30s in last minute | ❌ Not available |
+| `ebs_volume_throughput_exceeded_check` | Binary (0/1) | 1 if volume exceeded throughput >30s in last minute | `VolumeThroughputExceededCheck` (Oct 2024) |
+| `ebs_volume_iops_exceeded_check` | Binary (0/1) | 1 if volume exceeded IOPS >30s in last minute | `VolumeIOPSExceededCheck` (Oct 2024) |
+| `ebs_instance_throughput_exceeded_check` | Binary (0/1) | 1 if instance exceeded throughput >30s in last minute | `InstanceEBSThroughputExceededCheck` (Oct 2025) |
+| `ebs_instance_iops_exceeded_check` | Binary (0/1) | 1 if instance exceeded IOPS >30s in last minute | `InstanceEBSIOPSExceededCheck` (Oct 2025) |
 | `ebs_volume_throughput_exceeded_percent` | Percentage | % of time exceeding throughput (5-min avg) | — |
 | `ebs_volume_iops_exceeded_percent` | Percentage | % of time exceeding IOPS (5-min avg) | — |
 | `ebs_instance_throughput_exceeded_percent` | Percentage | % of time exceeding instance throughput (5-min avg) | — |
 | `ebs_instance_iops_exceeded_percent` | Percentage | % of time exceeding instance IOPS (1-min avg) | — |
 
 See **[CloudWatch-Compatible Metrics Guide](docs/cloudwatch-compatible-metrics.md)** for detailed comparison and migration instructions.
+
+**AWS CloudWatch Documentation:**
+- [Volume-level metrics (Oct 2024)](https://aws.amazon.com/about-aws/whats-new/2024/10/amazon-cloudwatch-ebs-volumes-exceeding-performance/) - `VolumeThroughputExceededCheck`, `VolumeIOPSExceededCheck`
+- [Instance-level metrics (Oct 2025)](https://aws.amazon.com/about-aws/whats-new/2025/10/amazon-cloudwatch-metrics-monitor-ec2-instances-i-o-performance/) - `InstanceEBSThroughputExceededCheck`, `InstanceEBSIOPSExceededCheck`
+- [CloudWatch metrics for Amazon EBS](https://docs.aws.amazon.com/ebs/latest/userguide/using_cloudwatch_ebs.html) - Complete reference
 
 ---
 

@@ -19,15 +19,15 @@ These metrics are automatically generated every 60 seconds via PrometheusRule:
 
 | Metric Name | CloudWatch Equivalent | Description |
 |-------------|----------------------|-------------|
-| `ebs_volume_throughput_exceeded_check` | `VolumeThroughputExceededCheck` | 1 if volume exceeded throughput >30s in last minute |
-| `ebs_volume_iops_exceeded_check` | `VolumeIOPSExceededCheck` | 1 if volume exceeded IOPS >30s in last minute |
+| `ebs_volume_throughput_exceeded_check` | `VolumeThroughputExceededCheck` (Oct 2024) | 1 if volume exceeded throughput >30s in last minute |
+| `ebs_volume_iops_exceeded_check` | `VolumeIOPSExceededCheck` (Oct 2024) | 1 if volume exceeded IOPS >30s in last minute |
 
-### Instance-Level Metrics (Not in CloudWatch)
+### Instance-Level Metrics
 
 | Metric Name | CloudWatch Equivalent | Description |
 |-------------|----------------------|-------------|
-| `ebs_instance_throughput_exceeded_check` | ❌ Not available | 1 if instance exceeded throughput >30s in last minute |
-| `ebs_instance_iops_exceeded_check` | ❌ Not available | 1 if instance exceeded IOPS >30s in last minute |
+| `ebs_instance_throughput_exceeded_check` | `InstanceEBSThroughputExceededCheck` (Oct 2025) | 1 if instance exceeded throughput >30s in last minute |
+| `ebs_instance_iops_exceeded_check` | `InstanceEBSIOPSExceededCheck` (Oct 2025) | 1 if instance exceeded IOPS >30s in last minute |
 
 ### Percentage Metrics (Bonus)
 
@@ -52,8 +52,7 @@ These metrics are automatically generated every 60 seconds via PrometheusRule:
 **Limitations:**
 - ❌ Binary only - can't tell *how much* you exceeded
 - ❌ Misses brief bursts (<30s per minute)
-- ❌ 5-10 minute data lag
-- ❌ Volume-level only (no instance metrics)
+- ❌ 5-10 minute data lag (for volume metrics; instance metrics may vary)
 - ❌ Sparse - only publishes when exceeded
 - ❌ Costs money ($500+/year for API calls)
 
@@ -209,3 +208,24 @@ ebs_volume_throughput_exceeded_check:
    ```
 
 This gives you the simplicity of CloudWatch with the precision of direct NVMe access.
+
+---
+
+## AWS CloudWatch Documentation
+
+**Official AWS Announcements:**
+- [Amazon CloudWatch now monitors EBS volumes exceeding provisioned performance (October 2024)](https://aws.amazon.com/about-aws/whats-new/2024/10/amazon-cloudwatch-ebs-volumes-exceeding-performance/)
+  - Introduces `VolumeThroughputExceededCheck` and `VolumeIOPSExceededCheck`
+  - Free for all Nitro-based EC2 instances
+  
+- [New Amazon CloudWatch metrics to monitor EC2 instances exceeding I/O performance (October 2025)](https://aws.amazon.com/about-aws/whats-new/2025/10/amazon-cloudwatch-metrics-monitor-ec2-instances-i-o-performance/)
+  - Introduces `InstanceEBSThroughputExceededCheck` and `InstanceEBSIOPSExceededCheck`
+  - Free for all Nitro-based EC2 instances with EBS volumes
+  
+**Technical Documentation:**
+- [Amazon CloudWatch metrics for Amazon EBS](https://docs.aws.amazon.com/ebs/latest/userguide/using_cloudwatch_ebs.html) - Complete metrics reference
+- [CloudWatch metrics available for EC2 instances](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/viewing_metrics_with_cloudwatch.html) - EC2-level metrics
+
+**Additional Resources:**
+- [Identify micro-bursting on Amazon EBS volumes](https://repost.aws/knowledge-center/ebs-identify-micro-bursting) - Troubleshooting guide
+- [Understanding and monitoring latency for Amazon EBS volumes](https://aws.amazon.com/blogs/storage/understanding-and-monitoring-latency-for-amazon-ebs-volumes-using-amazon-cloudwatch/) - AWS Storage Blog
